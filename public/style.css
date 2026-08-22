@@ -1,0 +1,19 @@
+:root { font-family: system-ui, sans-serif; color: #17202a; background: #f4f6f8; }
+body { margin: 0; }
+header { background: #f97316; color: white; padding: 24px; }
+header h1 { margin: 0 0 6px; }
+main { max-width: 1100px; margin: 20px auto; padding: 0 14px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.card { background: white; border-radius: 14px; padding: 18px; box-shadow: 0 2px 10px #0001; }
+.full { grid-column: 1 / -1; }
+input, button { font: inherit; padding: 10px; margin: 5px 3px; border-radius: 9px; border: 1px solid #ccd3da; }
+button { cursor: pointer; background: #f97316; color: white; border: 0; font-weight: 700; }
+button:hover { opacity: .9; }
+.row { display: flex; gap: 5px; }
+.row input { width: 50%; }
+.item { border: 1px solid #e1e5e8; padding: 12px; border-radius: 10px; margin: 8px 0; }
+.pill { float: right; padding: 3px 8px; border-radius: 99px; background: #e8f5e9; }
+.offer { margin-top: 15px; padding: 15px; border: 2px solid #f97316; border-radius: 12px; }
+.muted { color: #68737d; font-size: .9rem; }
+code { font-size: .8rem; }
+@media (max-width: 750px) { .grid { grid-template-columns: 1fr; } .full { grid-column: auto; } }

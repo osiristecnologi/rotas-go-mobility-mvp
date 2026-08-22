@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Rotas GO — Mobility MVP</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Rotas GO</h1>
+    <p>Teste do loop motorista → localização → despacho → corrida → disponibilidade.</p>
+  </header>
+
+  <main class="grid">
+    <section class="card">
+      <h2>🚕 Motorista</h2>
+      <input id="driverName" value="Motorista Demo" placeholder="Nome">
+      <button id="registerDriver">Cadastrar motorista</button>
+      <div id="driverPanel" hidden>
+        <p>ID: <strong id="driverId"></strong></p>
+        <p>Status: <strong id="driverStatus">OFFLINE</strong></p>
+        <button id="startShift">🟢 Iniciar expediente</button>
+        <button id="sendLocation">📍 Atualizar localização</button>
+        <button id="stopShift">🔴 Encerrar expediente</button>
+        <div id="offer" class="offer" hidden></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>👤 Passageiro</h2>
+      <input id="pickupLabel" value="Rua 10, Setor X" placeholder="Origem">
+      <input id="destinationLabel" value="Centro" placeholder="Destino">
+      <div class="row">
+        <input id="pickupLat" type="number" step="any" value="-16.2697545">
+        <input id="pickupLng" type="number" step="any" value="-48.9514744">
+      </div>
+      <p class="muted">Use os botões de GPS para preencher a origem pelo aparelho.</p>
+      <button id="usePassengerGps">📍 Usar meu GPS</button>
+      <button id="requestRide">🚕 Solicitar corrida</button>
+      <div id="rideStatus"></div>
+    </section>
+
+    <section class="card full">
+      <h2>⚡ Dispatch / localização temporária</h2>
+      <p class="muted">As posições abaixo são temporárias. O MVP expira localização após 90 segundos.</p>
+      <div id="drivers"></div>
+    </section>
+
+    <section class="card full">
+      <h2>📋 Corridas</h2>
+      <div id="rides"></div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
