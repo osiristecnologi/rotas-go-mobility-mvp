@@ -10,15 +10,10 @@ app.use(express.static("public"));
 
 const cache = new Map();
 
-function validMapsLink(link) {
+function isGoogleMapsLink(value) {
   try {
-    const u = new URL(link);
-    return [
-      "maps.app.goo.gl",
-      "www.google.com",
-      "google.com",
-      "maps.google.com"
-    ].includes(u.hostname);
+    const u = new URL(value);
+    return /(^|\.)google\.com$|(^|\.)maps\.app\.goo\.gl$/.test(u.hostname);
   } catch {
     return false;
   }
@@ -27,14 +22,11 @@ function validMapsLink(link) {
 function extractCoordinates(text) {
   if (!text) return null;
 
-  // Tentativas diferentes porque o Google pode representar
-  // coordenadas em formatos diferentes na URL/HTML.
   const patterns = [
     /[?&](?:q|query|ll|center|destination|origin)=(-?\d{1,3}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)/i,
-    /@(-?\d{1,3}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)(?:,|z|\/|$)/i,
+    /@(-?\d{1,3}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)/i,
     /!3d(-?\d{1,3}(?:\.\d+)?)!4d(-?\d{1,3}(?:\.\d+)?)/i,
     /!1d(-?\d{1,3}(?:\.\d+)?)!2d(-?\d{1,3}(?:\.\d+)?)/i,
-    /(?:lat(?:itude)?)[^0-9-]{0,20}(-?\d{1,3}\.\d{4,})[^0-9-]{0,30}(?:lng|lon(?:gitude)?)[^0-9-]{0,20}(-?\d{1,3}\.\d{4,})/i,
     /(-?\d{1,3}\.\d{5,})\s*[,;]\s*(-?\d{1,3}\.\d{5,})/
   ];
 
@@ -58,14 +50,15 @@ function extractCoordinates(text) {
   return null;
 }
 
-function uniqueStrings(values) {
-  return [...new Set(values.filter(Boolean).map(String))];
-}
-
-async function inspectWithBrowser(link) {
+async function inspect(link) {
   const browser = await chromium.launch({
     headless: true,
-    args: ["--disable-blink-features=AutomationControlled"]
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-blink-features=AutomationControlled"
+    ]
   });
 
   try {
@@ -80,115 +73,120 @@ async function inspectWithBrowser(link) {
 
     await page.goto(link, {
       waitUntil: "domcontentloaded",
-      timeout: 25_000
+      timeout: 30_000
     });
 
-    // Dá tempo para o Maps carregar dados dinamicamente.
-    await page.waitForTimeout(4_000);
+    await page.waitForTimeout(6_000);
 
     const finalUrl = page.url();
     const title = await page.title().catch(() => "");
     const bodyText = await page.locator("body").innerText().catch(() => "");
-
     const html = await page.content();
 
-    const candidateTexts = uniqueStrings([
-      finalUrl,
-      title,
-      bodyText,
-      html,
-      await page.locator('meta[property="og:title"]').getAttribute("content").catch(() => null),
-      await page.locator('meta[property="og:description"]').getAttribute("content").catch(() => null),
-      await page.locator('meta[property="description"]').getAttribute("content").catch(() => null)
-    ]);
+    const candidates = [finalUrl, title, bodyText, html];
 
     let coordinates = null;
     let matchedFrom = null;
 
-    for (const candidate of candidateTexts) {
-      coordinates = extractCoordinates(candidate);
-      if (coordinates) {
-        matchedFrom = candidate === finalUrl ? "finalUrl" : "page";
+    for (const candidate of candidates) {
+      const found = extractCoordinates(candidate);
+      if (found) {
+        coordinates = found;
+        matchedFrom =
+          candidate === finalUrl ? "final_url" :
+          candidate === title ? "title" :
+          candidate === bodyText ? "visible_text" : "html";
         break;
       }
     }
-
-    // Procura também por nomes de rua/endereços visíveis.
-    const addressCandidates = await page.locator("body").innerText()
-      .then(text => text.split("\n").map(x => x.trim()).filter(Boolean).slice(0, 120))
-      .catch(() => []);
 
     return {
       finalUrl,
       title,
       coordinates,
       matchedFrom,
-      visibleTextSample: addressCandidates.slice(0, 60),
-      htmlLength: html.length
+      htmlLength: html.length,
+      visibleTextSample: bodyText
+        .split("\n")
+        .map(x => x.trim())
+        .filter(Boolean)
+        .slice(0, 80)
     };
   } finally {
     await browser.close();
   }
 }
 
-app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, service: "rotas-go-location-resolver-v2" });
+app.get("/api/version", (_req, res) => {
+  res.json({
+    ok: true,
+    version: "3.0",
+    resolver: "playwright-google-maps",
+    timestamp: new Date().toISOString()
+  });
 });
 
 app.post("/api/location/resolve", async (req, res) => {
-  const driverId = String(req.body.driverId || "TEST-DRIVER").trim();
-  const link = String(req.body.link || "").trim();
+  const driverId = String(req.body?.driverId || "TEST-DRIVER").trim();
+  const link = String(req.body?.link || "").trim();
 
-  if (!validMapsLink(link)) {
+  if (!isGoogleMapsLink(link)) {
     return res.status(400).json({
+      ok: false,
       resolved: false,
       error: "LINK_GOOGLE_MAPS_INVALIDO"
     });
   }
 
   try {
-    const result = await inspectWithBrowser(link);
+    const inspected = await inspect(link);
 
-    if (!result.coordinates) {
+    if (!inspected.coordinates) {
       return res.status(422).json({
+        ok: true,
         resolved: false,
         reason: "COORDENADAS_NAO_ENCONTRADAS",
-        message:
-          "O Google Maps abriu, mas este protótipo não encontrou latitude/longitude no conteúdo renderizado.",
-        finalUrl: result.finalUrl,
-        title: result.title,
-        visibleTextSample: result.visibleTextSample,
-        htmlLength: result.htmlLength
+        finalUrl: inspected.finalUrl,
+        title: inspected.title,
+        htmlLength: inspected.htmlLength,
+        matchedFrom: inspected.matchedFrom,
+        visibleTextSample: inspected.visibleTextSample
       });
     }
 
+    const now = Date.now();
+
     const location = {
       driverId,
-      lat: result.coordinates.lat,
-      lng: result.coordinates.lng,
-      source: "GOOGLE_MAPS_SHARED_LINK_BROWSER_TEST",
-      sourceLink: link,
-      updatedAt: Date.now(),
-      expiresAt: Date.now() + TTL_MS
+      lat: inspected.coordinates.lat,
+      lng: inspected.coordinates.lng,
+      source: "GOOGLE_MAPS_SHARED_LINK_TEST",
+      updatedAt: now,
+      expiresAt: now + TTL_MS
     };
 
     cache.set(driverId, location);
 
-    res.json({
+    return res.json({
+      ok: true,
       resolved: true,
+      driverId,
       lat: location.lat,
       lng: location.lng,
-      finalUrl: result.finalUrl,
-      matchedFrom: result.matchedFrom,
-      location
+      source: location.source,
+      updatedAt: location.updatedAt,
+      expiresAt: location.expiresAt,
+      finalUrl: inspected.finalUrl,
+      matchedFrom: inspected.matchedFrom
     });
   } catch (error) {
-    console.error(error);
+    console.error("RESOLVER_ERROR", error);
 
-    res.status(502).json({
+    return res.status(502).json({
+      ok: false,
       resolved: false,
       error: "MAPS_BROWSER_RESOLUTION_FAILED",
-      message: error.message
+      message: error?.message || String(error)
     });
   }
 });
@@ -198,40 +196,35 @@ app.get("/api/location/:driverId", (req, res) => {
 
   if (!location) {
     return res.status(404).json({
+      ok: true,
       found: false,
-      message: "Nenhuma localização encontrada."
+      expired: false
     });
   }
 
   if (location.expiresAt <= Date.now()) {
     cache.delete(req.params.driverId);
     return res.status(410).json({
+      ok: true,
       found: false,
       expired: true
     });
   }
 
   res.json({
+    ok: true,
     found: true,
     location
   });
 });
 
-app.delete("/api/location/:driverId", (req, res) => {
-  cache.delete(req.params.driverId);
-  res.json({ ok: true });
-});
-
 setInterval(() => {
   const now = Date.now();
-
   for (const [id, location] of cache) {
-    if (location.expiresAt <= now) {
-      cache.delete(id);
-    }
+    if (location.expiresAt <= now) cache.delete(id);
   }
 }, 10_000);
 
 app.listen(PORT, () => {
-  console.log(`Rotas GO Location Resolver V2: http://localhost:${PORT}`);
+  console.log(`Rotas GO Resolver V3 running on port ${PORT}`);
 });

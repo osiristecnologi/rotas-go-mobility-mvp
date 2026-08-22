@@ -1,94 +1,81 @@
 const $ = id => document.getElementById(id);
-let timer = null;
 
-async function api(url, options = {}) {
-  const response = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...options
-  });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const error = new Error(data.message || data.error || `HTTP ${response.status}`);
-    error.data = data;
-    throw error;
-  }
-
-  return data;
+function print(value) {
+  $("result").textContent = JSON.stringify(value, null, 2);
 }
 
-$("resolve").onclick = async () => {
-  $("status").textContent = "🟡 Abrindo Google Maps no navegador do backend...";
-  $("diagnostic").textContent = "Aguardando...";
+async function resolve() {
+  $("status").textContent = "🟡 Resolvendo no backend...";
+  $("diagnostic").textContent = "Executando...";
 
   try {
-    const data = await api("/api/location/resolve", {
+    const response = await fetch("/api/location/resolve", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         driverId: $("driverId").value.trim(),
         link: $("mapsLink").value.trim()
       })
     });
 
-    $("status").textContent = "🟢 Localização encontrada!";
+    const data = await response.json();
 
-    $("result").textContent = JSON.stringify({
-      driverId: $("driverId").value.trim(),
+    // Nunca acessar data.location.source.
+    // A V3 retorna tudo no nível superior para evitar o erro da V2.
+    if (!response.ok || data.resolved !== true) {
+      $("status").textContent =
+        "🔴 " + (data.reason || data.error || `HTTP ${response.status}`);
+
+      print(data);
+
+      $("diagnostic").textContent = JSON.stringify({
+        httpStatus: response.status,
+        finalUrl: data.finalUrl ?? null,
+        title: data.title ?? null,
+        htmlLength: data.htmlLength ?? null,
+        matchedFrom: data.matchedFrom ?? null,
+        visibleTextSample: data.visibleTextSample ?? []
+      }, null, 2);
+
+      return;
+    }
+
+    $("status").textContent = "🟢 Coordenadas encontradas!";
+
+    print({
+      driverId: data.driverId,
       latitude: data.lat,
       longitude: data.lng,
-      source: data.location.source,
-      updatedAt: new Date(data.location.updatedAt).toLocaleString(),
-      expiresAt: new Date(data.location.expiresAt).toLocaleString()
-    }, null, 2);
+      source: data.source,
+      updatedAt: new Date(data.updatedAt).toLocaleString(),
+      expiresAt: new Date(data.expiresAt).toLocaleString(),
+      finalUrl: data.finalUrl
+    });
 
     $("diagnostic").textContent = JSON.stringify({
-      finalUrl: data.finalUrl,
-      matchedFrom: data.matchedFrom
+      httpStatus: response.status,
+      matchedFrom: data.matchedFrom,
+      finalUrl: data.finalUrl
     }, null, 2);
 
   } catch (error) {
-    $("status").textContent = "🔴 Coordenadas não encontradas neste teste.";
-
-    const data = error.data || {};
-    $("result").textContent = JSON.stringify({
+    $("status").textContent = "🔴 Erro de comunicação com o backend.";
+    print({
       resolved: false,
-      error: data.error || error.message,
-      reason: data.reason || null
-    }, null, 2);
-
-    $("diagnostic").textContent = JSON.stringify({
-      finalUrl: data.finalUrl || null,
-      title: data.title || null,
-      htmlLength: data.htmlLength || null,
-      visibleTextSample: data.visibleTextSample || []
-    }, null, 2);
-  }
-};
-
-async function poll() {
-  const id = encodeURIComponent($("driverId").value.trim());
-
-  try {
-    const data = await api(`/api/location/${id}`);
-
-    $("result").textContent = JSON.stringify(data.location, null, 2);
-    $("loop").textContent =
-      `🟢 Localização disponível — ${new Date().toLocaleTimeString()}`;
-  } catch (e) {
-    $("loop").textContent = `🟡 ${e.message}`;
+      clientError: error.message
+    });
+    $("diagnostic").textContent = "O frontend não conseguiu receber uma resposta JSON válida.";
   }
 }
 
-$("start").onclick = () => {
-  if (timer) return;
-  poll();
-  timer = setInterval(poll, 5000);
-  $("loop").textContent = "🟢 Loop ativo — 5 segundos.";
-};
+async function checkVersion() {
+  try {
+    const data = await fetch("/api/version").then(r => r.json());
+    $("version").textContent = `Backend: V${data.version} — ${data.resolver}`;
+  } catch {
+    $("version").textContent = "Backend: não respondeu";
+  }
+}
 
-$("stop").onclick = () => {
-  clearInterval(timer);
-  timer = null;
-  $("loop").textContent = "⏹ Parado.";
-};
+$("resolve").onclick = resolve;
+checkVersion();

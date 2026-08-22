@@ -1,55 +1,48 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Rotas GO — Resolver V2</title>
-  <link rel="stylesheet" href="/style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rotas GO — Resolver V3</title>
+<style>
+body{margin:0;background:#f1f5f9;font-family:system-ui;color:#111827}
+header{background:#f97316;color:#fff;padding:24px 18px}
+main{max-width:850px;margin:18px auto;padding:0 14px}
+.card{background:#fff;border-radius:18px;padding:20px;margin-bottom:16px;box-shadow:0 3px 14px #0001}
+label{display:block;font-weight:800;margin-top:12px}
+input,textarea,button{width:100%;box-sizing:border-box;font:inherit;padding:13px;border-radius:11px;margin-top:7px}
+textarea{min-height:120px}
+button{border:0;background:#f97316;color:#fff;font-weight:800}
+.status{margin-top:14px;padding:14px;border-radius:10px;background:#f8fafc}
+pre{white-space:pre-wrap;background:#0f172a;color:#e2e8f0;padding:14px;border-radius:10px;overflow:auto}
+small{color:#64748b}
+</style>
 </head>
 <body>
 <header>
-  <h1>🦈 Rotas GO — Teste V2</h1>
-  <p>Google Maps → navegador do backend → tentativa de obter localização</p>
+<h1>🦈 Rotas GO — Resolver V3</h1>
+<div>Google Maps → Playwright → tentativa de lat/lng</div>
 </header>
-
 <main>
-  <section class="card">
-    <h2>🔗 Localização compartilhada</h2>
-
-    <label>Motorista / ID</label>
-    <input id="driverId" value="DRV-TESTE-34912">
-
-    <label>Link do Google Maps</label>
-    <textarea id="mapsLink">https://maps.app.goo.gl/B3Xz5LwMmADe3Jcr6?g_st=ac</textarea>
-
-    <button id="resolve">🔎 Resolver localização</button>
-
-    <div id="status" class="status">Aguardando...</div>
-  </section>
-
-  <section class="card">
-    <h2>📍 Resultado</h2>
-    <pre id="result">Nenhuma localização recebida.</pre>
-  </section>
-
-  <section class="card">
-    <h2>🧪 Diagnóstico</h2>
-    <p>
-      Se não encontrar coordenadas, mostramos a URL final e parte do texto
-      que o navegador do backend conseguiu enxergar. Isso é importante para
-      descobrir onde o Google está escondendo os dados.
-    </p>
-    <pre id="diagnostic">Nenhum diagnóstico ainda.</pre>
-  </section>
-
-  <section class="card">
-    <h2>🔄 Loop de leitura</h2>
-    <button id="start">▶ Iniciar</button>
-    <button id="stop">⏹ Parar</button>
-    <div id="loop">Parado.</div>
-  </section>
+<section class="card">
+<h2>🔗 Localização compartilhada</h2>
+<label>Motorista / ID</label>
+<input id="driverId" value="DRV-TESTE-34912">
+<label>Link do Google Maps</label>
+<textarea id="mapsLink">https://maps.app.goo.gl/B3Xz5LwMmADe3Jcr6?g_st=ac</textarea>
+<button id="resolve">🔎 Resolver localização</button>
+<div id="status" class="status">Aguardando...</div>
+<small id="version">Verificando backend...</small>
+</section>
+<section class="card">
+<h2>📍 Resultado</h2>
+<pre id="result">Nenhum teste executado.</pre>
+</section>
+<section class="card">
+<h2>🧪 Diagnóstico</h2>
+<pre id="diagnostic">Nenhum diagnóstico.</pre>
+</section>
 </main>
-
 <script src="/app.js"></script>
 </body>
 </html>
