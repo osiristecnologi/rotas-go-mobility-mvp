@@ -3,32 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Rotas GO — Location Resolver V4</title>
+<title>Rotas GO — Location Resolver V4.1</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#f1f5f9;color:#111827;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 header{background:#f97316;color:white;padding:24px 18px}
 header h1{margin:0 0 6px;font-size:26px}
+header div{opacity:.95;font-size:14px}
 main{max-width:850px;margin:18px auto;padding:0 14px}
 .card{background:white;border-radius:18px;padding:20px;margin-bottom:16px;box-shadow:0 3px 14px rgba(0,0,0,.08)}
 label{display:block;font-weight:800;margin-top:12px}
 input,textarea,button{width:100%;font:inherit;padding:13px;border-radius:11px;margin-top:7px}
 input,textarea{border:1px solid #cbd5e1}
-textarea{min-height:120px;resize:vertical}
+textarea{min-height:100px;resize:vertical}
 button{border:0;background:#f97316;color:#fff;font-weight:800;cursor:pointer}
 button:disabled{opacity:.6}
 .status{margin-top:14px;padding:14px;border-radius:11px;background:#f8fafc;font-weight:700}
 .status.ok{background:#ecfdf5;color:#047857}
 .status.err{background:#fef2f2;color:#b91c1c}
 .status.wait{background:#fffbeb;color:#a16207}
-pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e2e8f0;padding:14px;border-radius:11px;min-height:70px;overflow:auto}
-.badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#e2e8f0;margin-top:8px}
+pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e2e8f0;padding:14px;border-radius:11px;min-height:70px;overflow:auto;font-size:13px}
+.badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#e2e8f0;margin-top:8px;margin-right:6px;font-size:13px}
+.hint{font-size:13px;color:#64748b;margin-top:8px;line-height:1.4}
 </style>
 </head>
 <body>
 <header>
-<h1>🦈 Rotas GO — Resolver V4</h1>
-<div>Diagnóstico seguro: backend → Chromium → Google Maps → coordenadas</div>
+<h1>🦈 Rotas GO — Resolver V4.1</h1>
+<div>Fetch expand → (opcional) Playwright → coordenadas · diagnóstico rico</div>
 </header>
 
 <main>
@@ -44,7 +46,14 @@ pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e2e8f0;
 <button id="resolve">🔎 Resolver localização</button>
 
 <div id="status" class="status">Aguardando teste...</div>
-<div id="version" class="badge">Backend: verificando...</div>
+<div>
+  <span id="version" class="badge">Backend: verificando...</span>
+  <span id="pwBadge" class="badge">Playwright: —</span>
+</div>
+<p class="hint">
+  Dica: links de <strong>lugares</strong> (com @lat,lng na URL final) resolvem bem.
+  Shares de <strong>localização ao vivo</strong> costumam não expor coordenadas no HTML.
+</p>
 </section>
 
 <section class="card">
@@ -99,6 +108,10 @@ async function checkBackend() {
     if (!result.parseError && result.data?.ok) {
       $("version").textContent =
         `Backend: V${result.data.version} — OK`;
+      $("pwBadge").textContent =
+        result.data.playwrightEnabled === false
+          ? "Playwright: desligado"
+          : "Playwright: ligado";
       return true;
     }
 
@@ -106,6 +119,7 @@ async function checkBackend() {
     return false;
   } catch (error) {
     $("version").textContent = "Backend: não respondeu";
+    $("pwBadge").textContent = "Playwright: —";
     return false;
   }
 }
@@ -116,10 +130,12 @@ async function resolveLocation() {
   button.disabled = true;
   $("status").className = "status wait";
   $("status").textContent = "🟡 Backend executando o teste...";
+  $("result").textContent = "Aguardando...";
+  $("diagnostic").textContent = "Aguardando...";
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    const timeout = setTimeout(() => controller.abort(), 28000);
 
     const response = await fetch("/api/location/resolve", {
       method: "POST",
@@ -149,7 +165,8 @@ async function resolveLocation() {
       });
 
       $("diagnostic").textContent =
-        result.raw || "O backend encerrou a resposta sem conteúdo.";
+        result.raw ||
+        "O backend encerrou a resposta sem conteúdo. Possível OOM do Chromium ou crash do processo.";
       return;
     }
 
@@ -164,10 +181,10 @@ async function resolveLocation() {
         latitude: data.location.lat,
         longitude: data.location.lng,
         source: data.location.source,
+        matchedFrom: data.matchedFrom || data.location.matchedFrom,
         updatedAt: new Date(data.location.updatedAt).toLocaleString(),
         expiresAt: new Date(data.location.expiresAt).toLocaleString(),
         finalUrl: data.finalUrl,
-        matchedFrom: data.matchedFrom,
         durationMs: data.durationMs
       });
 
@@ -175,32 +192,40 @@ async function resolveLocation() {
         httpStatus: result.httpStatus,
         stage: data.stage,
         durationMs: data.durationMs,
+        matchedFrom: data.matchedFrom,
         finalUrl: data.finalUrl,
-        matchedFrom: data.matchedFrom
+        diagnostic: data.diagnostic || null
       });
     } else {
       $("status").className = "status err";
       $("status").textContent =
         `🔴 ${data.reason || data.error || "Falha na resolução"}`;
 
-      showJson($("result"), data);
+      showJson($("result"), {
+        resolved: false,
+        reason: data.reason || null,
+        error: data.error || null,
+        durationMs: data.durationMs,
+        finalUrl: data.finalUrl || null
+      });
 
       showJson($("diagnostic"), {
         httpStatus: result.httpStatus,
         stage: data.stage,
         durationMs: data.durationMs,
-        error: data.error || null,
         finalUrl: data.finalUrl || null,
         title: data.title || null,
         htmlLength: data.htmlLength || null,
-        visibleTextSample: data.visibleTextSample || []
+        networkHits: data.networkHits ?? null,
+        visibleTextSample: data.visibleTextSample || [],
+        diagnostic: data.diagnostic || null
       });
     }
   } catch (error) {
     $("status").className = "status err";
     $("status").textContent =
       error.name === "AbortError"
-        ? "🔴 Frontend cancelou por timeout."
+        ? "🔴 Frontend cancelou por timeout (28s)."
         : "🔴 Falha de comunicação com o backend.";
 
     showJson($("result"), {
@@ -209,7 +234,7 @@ async function resolveLocation() {
     });
 
     $("diagnostic").textContent =
-      "O backend não conseguiu entregar uma resposta JSON completa.";
+      "O frontend não recebeu uma resposta JSON completa. Verifique logs do servidor e memória do container.";
   } finally {
     button.disabled = false;
     checkBackend();
