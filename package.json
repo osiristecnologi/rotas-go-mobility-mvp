@@ -1,6 +1,6 @@
 {
-  "name": "rotas-go-location-resolver-minimal",
-  "version": "0.5.1-minimal",
+  "name": "rotas-go-location-live",
+  "version": "5.0.0",
   "private": true,
   "type": "module",
   "scripts": {

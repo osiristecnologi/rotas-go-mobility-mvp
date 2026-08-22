@@ -2,247 +2,293 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Rotas GO — Location Resolver V4.1</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Rotas GO — Localização ao Vivo</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#f1f5f9;color:#111827;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-header{background:#f97316;color:white;padding:24px 18px}
-header h1{margin:0 0 6px;font-size:26px}
-header div{opacity:.95;font-size:14px}
-main{max-width:850px;margin:18px auto;padding:0 14px}
-.card{background:white;border-radius:18px;padding:20px;margin-bottom:16px;box-shadow:0 3px 14px rgba(0,0,0,.08)}
-label{display:block;font-weight:800;margin-top:12px}
-input,textarea,button{width:100%;font:inherit;padding:13px;border-radius:11px;margin-top:7px}
-input,textarea{border:1px solid #cbd5e1}
-textarea{min-height:100px;resize:vertical}
+header{background:#f97316;color:#fff;padding:20px 16px}
+header h1{margin:0 0 4px;font-size:22px}
+header p{margin:0;opacity:.9;font-size:13px}
+main{max-width:520px;margin:14px auto;padding:0 12px 40px}
+.card{background:#fff;border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 2px 12px rgba(0,0,0,.07)}
+h2{margin:0 0 12px;font-size:17px}
+label{display:block;font-weight:700;font-size:13px;margin-top:10px}
+input,button{width:100%;font:inherit;padding:12px;border-radius:10px;margin-top:6px}
+input{border:1px solid #cbd5e1}
 button{border:0;background:#f97316;color:#fff;font-weight:800;cursor:pointer}
-button:disabled{opacity:.6}
-.status{margin-top:14px;padding:14px;border-radius:11px;background:#f8fafc;font-weight:700}
+button.secondary{background:#64748b}
+button.danger{background:#dc2626}
+button:disabled{opacity:.55}
+.status{margin-top:12px;padding:12px;border-radius:10px;font-weight:700;font-size:14px;background:#f8fafc}
 .status.ok{background:#ecfdf5;color:#047857}
 .status.err{background:#fef2f2;color:#b91c1c}
 .status.wait{background:#fffbeb;color:#a16207}
-pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e2e8f0;padding:14px;border-radius:11px;min-height:70px;overflow:auto;font-size:13px}
-.badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#e2e8f0;margin-top:8px;margin-right:6px;font-size:13px}
-.hint{font-size:13px;color:#64748b;margin-top:8px;line-height:1.4}
+pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:10px;font-size:12px;min-height:60px}
+.row{display:flex;gap:8px}
+.row button{flex:1}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#e2e8f0;font-size:12px;margin-right:4px}
+.tabs{display:flex;gap:6px;margin-bottom:14px}
+.tabs button{background:#e2e8f0;color:#334155}
+.tabs button.active{background:#f97316;color:#fff}
+.hint{font-size:12px;color:#64748b;margin-top:8px;line-height:1.4}
+#mapLink{font-size:13px;word-break:break-all}
 </style>
 </head>
 <body>
 <header>
-<h1>🦈 Rotas GO — Resolver V4.1</h1>
-<div>Fetch expand → (opcional) Playwright → coordenadas · diagnóstico rico</div>
+  <h1>🦈 Rotas GO — Ao Vivo</h1>
+  <p>Localização real do dispositivo · sem scraping</p>
 </header>
 
 <main>
-<section class="card">
-<h2>🔗 Localização compartilhada</h2>
+  <div class="tabs">
+    <button id="tabDriver" class="active">📱 Motorista</button>
+    <button id="tabViewer">👁 Acompanhar</button>
+  </div>
 
-<label for="driverId">Motorista / ID</label>
-<input id="driverId" value="DRV-TESTE-34912">
+  <!-- ===== ABA MOTORISTA ===== -->
+  <section id="panelDriver">
+    <div class="card">
+      <h2>Compartilhar minha localização</h2>
 
-<label for="mapsLink">Link do Google Maps</label>
-<textarea id="mapsLink">https://maps.app.goo.gl/B3Xz5LwMmADe3Jcr6?g_st=ac</textarea>
+      <label>ID do Motorista</label>
+      <input id="driverId" value="DRV-TESTE-34912">
 
-<button id="resolve">🔎 Resolver localização</button>
+      <div class="row" style="margin-top:12px">
+        <button id="btnStart">▶ Iniciar envio</button>
+        <button id="btnStop" class="danger" disabled>■ Parar</button>
+      </div>
 
-<div id="status" class="status">Aguardando teste...</div>
-<div>
-  <span id="version" class="badge">Backend: verificando...</span>
-  <span id="pwBadge" class="badge">Playwright: —</span>
-</div>
-<p class="hint">
-  Dica: links de <strong>lugares</strong> (com @lat,lng na URL final) resolvem bem.
-  Shares de <strong>localização ao vivo</strong> costumam não expor coordenadas no HTML.
-</p>
-</section>
+      <div id="driverStatus" class="status">Parado. Clique em Iniciar e permita a localização.</div>
+      <p class="hint">
+        O celular vai pedir permissão de localização.
+        Enquanto estiver ativo, a posição é enviada a cada 8 segundos.
+      </p>
+    </div>
 
-<section class="card">
-<h2>📍 Resultado</h2>
-<pre id="result">Nenhum teste executado.</pre>
-</section>
+    <div class="card">
+      <h2>Último envio</h2>
+      <pre id="driverLog">Nenhum envio ainda.</pre>
+    </div>
+  </section>
 
-<section class="card">
-<h2>🧪 Diagnóstico</h2>
-<pre id="diagnostic">Nenhum diagnóstico.</pre>
-</section>
+  <!-- ===== ABA ACOMPANHAR ===== -->
+  <section id="panelViewer" style="display:none">
+    <div class="card">
+      <h2>Acompanhar motorista</h2>
+
+      <label>ID do Motorista</label>
+      <input id="watchId" value="DRV-TESTE-34912">
+
+      <div class="row" style="margin-top:12px">
+        <button id="btnWatchStart">▶ Iniciar leitura</button>
+        <button id="btnWatchStop" class="secondary" disabled>■ Parar</button>
+      </div>
+
+      <div id="viewerStatus" class="status">Aguardando...</div>
+    </div>
+
+    <div class="card">
+      <h2>Posição atual</h2>
+      <pre id="viewerResult">Nenhuma posição.</pre>
+      <p id="mapLink" class="hint"></p>
+    </div>
+  </section>
+
+  <div class="card">
+    <span id="backendBadge" class="badge">Backend: verificando...</span>
+    <span id="activeBadge" class="badge">Ativos: —</span>
+  </div>
 </main>
 
 <script>
 const $ = id => document.getElementById(id);
 
-function showJson(element, value) {
-  element.textContent = JSON.stringify(value, null, 2);
-}
+let sendTimer = null;
+let watchTimer = null;
+let watchId = null;
 
-async function readResponse(response) {
-  const raw = await response.text();
+// ----- Tabs -----
+$("tabDriver").onclick = () => {
+  $("tabDriver").classList.add("active");
+  $("tabViewer").classList.remove("active");
+  $("panelDriver").style.display = "";
+  $("panelViewer").style.display = "none";
+};
+$("tabViewer").onclick = () => {
+  $("tabViewer").classList.add("active");
+  $("tabDriver").classList.remove("active");
+  $("panelDriver").style.display = "none";
+  $("panelViewer").style.display = "";
+};
 
-  if (!raw.trim()) {
-    return {
-      parseError: true,
-      httpStatus: response.status,
-      raw: ""
-    };
-  }
-
-  try {
-    return {
-      parseError: false,
-      httpStatus: response.status,
-      data: JSON.parse(raw)
-    };
-  } catch {
-    return {
-      parseError: true,
-      httpStatus: response.status,
-      raw: raw.slice(0, 2000)
-    };
-  }
-}
-
+// ----- Backend check -----
 async function checkBackend() {
   try {
-    const response = await fetch("/health", { cache: "no-store" });
-    const result = await readResponse(response);
-
-    if (!result.parseError && result.data?.ok) {
-      $("version").textContent =
-        `Backend: V${result.data.version} — OK`;
-      $("pwBadge").textContent =
-        result.data.playwrightEnabled === false
-          ? "Playwright: desligado"
-          : "Playwright: ligado";
-      return true;
+    const r = await fetch("/health", { cache: "no-store" });
+    const d = await r.json();
+    if (d.ok) {
+      $("backendBadge").textContent = `Backend: V${d.version} — OK`;
+      $("activeBadge").textContent = `Ativos: ${d.activeDrivers ?? 0}`;
+    } else {
+      $("backendBadge").textContent = "Backend: resposta estranha";
     }
-
-    $("version").textContent = "Backend: resposta inválida";
-    return false;
-  } catch (error) {
-    $("version").textContent = "Backend: não respondeu";
-    $("pwBadge").textContent = "Playwright: —";
-    return false;
+  } catch {
+    $("backendBadge").textContent = "Backend: offline";
   }
 }
 
-async function resolveLocation() {
-  const button = $("resolve");
+// ----- Motorista: enviar localização -----
+function getPosition() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocalização não suportada neste navegador"));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve(pos),
+      (err) => reject(err),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 }
+    );
+  });
+}
 
-  button.disabled = true;
-  $("status").className = "status wait";
-  $("status").textContent = "🟡 Backend executando o teste...";
-  $("result").textContent = "Aguardando...";
-  $("diagnostic").textContent = "Aguardando...";
+async function sendOnce() {
+  const driverId = $("driverId").value.trim();
+  if (!driverId) {
+    $("driverStatus").className = "status err";
+    $("driverStatus").textContent = "Informe o ID do motorista";
+    return;
+  }
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 28000);
+    $("driverStatus").className = "status wait";
+    $("driverStatus").textContent = "Obtendo localização...";
 
-    const response = await fetch("/api/location/resolve", {
+    const pos = await getPosition();
+    const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+
+    const res = await fetch("/api/location/update", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        driverId: $("driverId").value.trim(),
-        link: $("mapsLink").value.trim()
-      }),
-      signal: controller.signal
+      body: JSON.stringify({ driverId, lat, lng, accuracy }),
     });
 
-    clearTimeout(timeout);
+    const data = await res.json();
 
-    const result = await readResponse(response);
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Falha ao salvar");
+    }
 
-    if (result.parseError) {
-      $("status").className = "status err";
-      $("status").textContent =
-        `🔴 Backend devolveu resposta vazia/não-JSON (HTTP ${result.httpStatus}).`;
+    $("driverStatus").className = "status ok";
+    $("driverStatus").textContent = `Enviado · precisão ~${Math.round(accuracy || 0)} m`;
 
-      showJson($("result"), {
-        resolved: false,
-        httpStatus: result.httpStatus,
-        clientError: result.raw
-          ? "Resposta não era JSON"
-          : "Resposta vazia"
-      });
+    $("driverLog").textContent = JSON.stringify(
+      {
+        driverId,
+        lat,
+        lng,
+        accuracy,
+        updatedAt: new Date().toLocaleString(),
+      },
+      null,
+      2
+    );
 
-      $("diagnostic").textContent =
-        result.raw ||
-        "O backend encerrou a resposta sem conteúdo. Possível OOM do Chromium ou crash do processo.";
+    checkBackend();
+  } catch (err) {
+    $("driverStatus").className = "status err";
+    $("driverStatus").textContent =
+      err.code === 1
+        ? "Permissão de localização negada"
+        : err.message || "Erro ao obter/enviar localização";
+  }
+}
+
+$("btnStart").onclick = () => {
+  $("btnStart").disabled = true;
+  $("btnStop").disabled = false;
+  sendOnce();
+  sendTimer = setInterval(sendOnce, 8000);
+};
+
+$("btnStop").onclick = () => {
+  if (sendTimer) clearInterval(sendTimer);
+  sendTimer = null;
+  $("btnStart").disabled = false;
+  $("btnStop").disabled = true;
+  $("driverStatus").className = "status";
+  $("driverStatus").textContent = "Parado.";
+};
+
+// ----- Acompanhar -----
+async function watchOnce() {
+  const id = $("watchId").value.trim();
+  if (!id) return;
+
+  try {
+    const res = await fetch(`/api/location/${encodeURIComponent(id)}`, {
+      cache: "no-store",
+    });
+    const data = await res.json();
+
+    if (!data.found) {
+      $("viewerStatus").className = "status err";
+      $("viewerStatus").textContent = data.expired
+        ? "Localização expirou (sem atualização recente)"
+        : "Motorista ainda não enviou localização";
+      $("viewerResult").textContent = JSON.stringify(data, null, 2);
+      $("mapLink").textContent = "";
       return;
     }
 
-    const data = result.data;
+    const loc = data.location;
+    const age = Math.round((Date.now() - loc.updatedAt) / 1000);
 
-    if (data.resolved === true && data.location) {
-      $("status").className = "status ok";
-      $("status").textContent = "🟢 Coordenadas encontradas!";
+    $("viewerStatus").className = "status ok";
+    $("viewerStatus").textContent = `Ao vivo · atualizado há ${age}s · precisão ~${Math.round(loc.accuracy || 0)} m`;
 
-      showJson($("result"), {
-        driverId: data.location.driverId,
-        latitude: data.location.lat,
-        longitude: data.location.lng,
-        source: data.location.source,
-        matchedFrom: data.matchedFrom || data.location.matchedFrom,
-        updatedAt: new Date(data.location.updatedAt).toLocaleString(),
-        expiresAt: new Date(data.location.expiresAt).toLocaleString(),
-        finalUrl: data.finalUrl,
-        durationMs: data.durationMs
-      });
+    $("viewerResult").textContent = JSON.stringify(
+      {
+        driverId: loc.driverId,
+        latitude: loc.lat,
+        longitude: loc.lng,
+        accuracy: loc.accuracy,
+        source: loc.source,
+        updatedAt: new Date(loc.updatedAt).toLocaleString(),
+        ageSeconds: age,
+      },
+      null,
+      2
+    );
 
-      showJson($("diagnostic"), {
-        httpStatus: result.httpStatus,
-        stage: data.stage,
-        durationMs: data.durationMs,
-        matchedFrom: data.matchedFrom,
-        finalUrl: data.finalUrl,
-        diagnostic: data.diagnostic || null
-      });
-    } else {
-      $("status").className = "status err";
-      $("status").textContent =
-        `🔴 ${data.reason || data.error || "Falha na resolução"}`;
-
-      showJson($("result"), {
-        resolved: false,
-        reason: data.reason || null,
-        error: data.error || null,
-        durationMs: data.durationMs,
-        finalUrl: data.finalUrl || null
-      });
-
-      showJson($("diagnostic"), {
-        httpStatus: result.httpStatus,
-        stage: data.stage,
-        durationMs: data.durationMs,
-        finalUrl: data.finalUrl || null,
-        title: data.title || null,
-        htmlLength: data.htmlLength || null,
-        networkHits: data.networkHits ?? null,
-        visibleTextSample: data.visibleTextSample || [],
-        diagnostic: data.diagnostic || null
-      });
-    }
-  } catch (error) {
-    $("status").className = "status err";
-    $("status").textContent =
-      error.name === "AbortError"
-        ? "🔴 Frontend cancelou por timeout (28s)."
-        : "🔴 Falha de comunicação com o backend.";
-
-    showJson($("result"), {
-      resolved: false,
-      clientError: error.message
-    });
-
-    $("diagnostic").textContent =
-      "O frontend não recebeu uma resposta JSON completa. Verifique logs do servidor e memória do container.";
-  } finally {
-    button.disabled = false;
+    $("mapLink").innerHTML = `<a href="https://www.google.com/maps?q=${loc.lat},${loc.lng}" target="_blank" rel="noopener">Abrir no Google Maps →</a>`;
     checkBackend();
+  } catch (err) {
+    $("viewerStatus").className = "status err";
+    $("viewerStatus").textContent = "Erro de comunicação";
   }
 }
 
-$("resolve").addEventListener("click", resolveLocation);
+$("btnWatchStart").onclick = () => {
+  $("btnWatchStart").disabled = true;
+  $("btnWatchStop").disabled = false;
+  watchOnce();
+  watchTimer = setInterval(watchOnce, 5000);
+};
+
+$("btnWatchStop").onclick = () => {
+  if (watchTimer) clearInterval(watchTimer);
+  watchTimer = null;
+  $("btnWatchStart").disabled = false;
+  $("btnWatchStop").disabled = true;
+  $("viewerStatus").className = "status";
+  $("viewerStatus").textContent = "Leitura parada.";
+};
+
 checkBackend();
+setInterval(checkBackend, 20000);
 </script>
 </body>
 </html>
