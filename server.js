@@ -1,389 +1,183 @@
 import express from "express";
-import http from "http";
-import { WebSocketServer } from "ws";
-import crypto from "crypto";
-import path from "path";
-import { fileURLToPath } from "url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const PORT = process.env.PORT || 3000;
+const TTL_MS = Number(process.env.LOCATION_TTL_MS || 90_000);
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static("public"));
 
-const PORT = process.env.PORT || 3000;
-const LOCATION_TTL_MS = Number(process.env.LOCATION_TTL_MS || 90_000);
-const OFFER_TIMEOUT_MS = Number(process.env.OFFER_TIMEOUT_MS || 15_000);
+const cache = new Map();
 
-const drivers = new Map();
-const passengers = new Map();
-const rides = new Map();
-const sockets = new Map();
+function extractCoordinates(text) {
+  if (!text) return null;
 
-const now = () => Date.now();
-const id = (prefix) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
+  // Padrões comuns encontrados em URLs/textos de mapas.
+  const patterns = [
+    /[?&](?:q|query|ll|center|destination)=(-?\d{1,3}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)/i,
+    /@(-?\d{1,3}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)(?:,|z|\/|$)/i,
+    /!3d(-?\d{1,3}(?:\.\d+)?)!4d(-?\d{1,3}(?:\.\d+)?)/i,
+    /(-?\d{1,3}\.\d{4,})\s*,\s*(-?\d{1,3}\.\d{4,})/
+  ];
 
-function distanceKm(aLat, aLng, bLat, bLng) {
-  const R = 6371;
-  const toRad = (v) => v * Math.PI / 180;
-  const dLat = toRad(bLat - aLat);
-  const dLng = toRad(bLng - aLng);
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(x));
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (!m) continue;
+
+    const lat = Number(m[1]);
+    const lng = Number(m[2]);
+
+    if (
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      Math.abs(lat) <= 90 &&
+      Math.abs(lng) <= 180
+    ) {
+      return { lat, lng };
+    }
+  }
+
+  return null;
 }
 
-function publicDriver(d) {
+function validMapsLink(link) {
+  try {
+    const u = new URL(link);
+    return [
+      "maps.app.goo.gl",
+      "www.google.com",
+      "google.com",
+      "maps.google.com"
+    ].includes(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+async function resolveGoogleMapsLink(link) {
+  if (!validMapsLink(link)) {
+    throw new Error("LINK_GOOGLE_MAPS_INVALIDO");
+  }
+
+  const response = await fetch(link, {
+    redirect: "follow",
+    headers: {
+      "User-Agent": "RotasGO-LocationResolver/0.1"
+    }
+  });
+
+  const finalUrl = response.url || link;
+  const html = await response.text();
+
+  let coords = extractCoordinates(finalUrl);
+
+  if (!coords) {
+    coords = extractCoordinates(html);
+  }
+
+  if (!coords) {
+    return {
+      resolved: false,
+      finalUrl,
+      status: response.status,
+      message:
+        "O link foi resolvido, mas não foi encontrada uma latitude/longitude em formato reconhecível. O formato do Google pode mudar ou exigir uma integração oficial."
+    };
+  }
+
   return {
-    id: d.id,
-    name: d.name,
-    status: d.status,
-    lat: d.lat,
-    lng: d.lng,
-    accuracy: d.accuracy,
-    locationSource: d.locationSource,
-    locationUpdatedAt: d.locationUpdatedAt,
-    locationExpiresAt: d.locationExpiresAt,
-    locationLink: d.locationLink || null
+    resolved: true,
+    finalUrl,
+    status: response.status,
+    ...coords
   };
 }
 
-function broadcast(type, payload) {
-  const message = JSON.stringify({ type, payload, at: now() });
-  for (const ws of wss.clients) {
-    if (ws.readyState === 1) ws.send(message);
-  }
-}
-
-function sendToDriver(driverId, type, payload) {
-  const ws = sockets.get(`driver:${driverId}`);
-  if (ws?.readyState === 1) ws.send(JSON.stringify({ type, payload, at: now() }));
-}
-
-function sendToPassenger(passengerId, type, payload) {
-  const ws = sockets.get(`passenger:${passengerId}`);
-  if (ws?.readyState === 1) ws.send(JSON.stringify({ type, payload, at: now() }));
-}
-
-function locationFresh(d) {
-  return d.lat != null &&
-    d.lng != null &&
-    d.locationExpiresAt != null &&
-    d.locationExpiresAt > now();
-}
-
-function availableDriversNear(lat, lng, radiusKm = 10) {
-  return [...drivers.values()]
-    .filter(d => d.status === "AVAILABLE" && locationFresh(d))
-    .map(d => ({ ...publicDriver(d), distanceKm: distanceKm(lat, lng, d.lat, d.lng) }))
-    .filter(d => d.distanceKm <= radiusKm)
-    .sort((a, b) => a.distanceKm - b.distanceKm);
-}
-
-async function offerNextDriver(ride) {
-  const candidates = availableDriversNear(ride.pickup.lat, ride.pickup.lng, ride.searchRadiusKm)
-    .filter(d => !ride.triedDriverIds.includes(d.id));
-
-  if (!candidates.length) {
-    ride.status = "NO_DRIVER";
-    ride.updatedAt = now();
-    sendToPassenger(ride.passengerId, "RIDE_NO_DRIVER", ride);
-    broadcast("RIDE_UPDATED", ride);
-    return;
-  }
-
-  const candidate = candidates[0];
-  ride.triedDriverIds.push(candidate.id);
-  ride.currentDriverId = candidate.id;
-  ride.status = "OFFERED";
-  ride.updatedAt = now();
-
-  const driver = drivers.get(candidate.id);
-  if (driver) driver.status = "OFFERED";
-
-  sendToDriver(candidate.id, "RIDE_OFFER", {
-    ride,
-    pickupDistanceKm: candidate.distanceKm
-  });
-  sendToPassenger(ride.passengerId, "RIDE_UPDATED", ride);
-  broadcast("RIDE_UPDATED", ride);
-
-  setTimeout(async () => {
-    const current = rides.get(ride.id);
-    if (!current || current.status !== "OFFERED" || current.currentDriverId !== candidate.id) return;
-    const d = drivers.get(candidate.id);
-    if (d && d.status === "OFFERED") d.status = "AVAILABLE";
-    await offerNextDriver(current);
-  }, OFFER_TIMEOUT_MS);
-}
-
-app.get("/api/health", (_req, res) => res.json({
-  ok: true,
-  drivers: drivers.size,
-  rides: rides.size,
-  locationTtlSeconds: LOCATION_TTL_MS / 1000
-}));
-
-app.get("/api/drivers", (_req, res) => {
-  res.json([...drivers.values()].map(publicDriver));
-});
-
-app.get("/api/rides", (_req, res) => {
-  res.json([...rides.values()]);
-});
-
-app.post("/api/drivers/register", (req, res) => {
-  const name = String(req.body.name || "").trim() || "Motorista";
-  const driver = {
-    id: id("DRV"),
-    name,
-    status: "OFFLINE",
-    lat: null,
-    lng: null,
-    accuracy: null,
-    locationSource: null,
-    locationUpdatedAt: null,
-    locationExpiresAt: null,
-    shiftStartedAt: null
-  };
-  drivers.set(driver.id, driver);
-  res.status(201).json(publicDriver(driver));
-});
-
-app.post("/api/drivers/:driverId/shift/start", (req, res) => {
-  const d = drivers.get(req.params.driverId);
-  if (!d) return res.status(404).json({ error: "driver_not_found" });
-
-  d.status = "AVAILABLE";
-  d.shiftStartedAt = now();
-
-  if (Number.isFinite(req.body.lat) && Number.isFinite(req.body.lng)) {
-    d.lat = req.body.lat;
-    d.lng = req.body.lng;
-    d.accuracy = Number.isFinite(req.body.accuracy) ? req.body.accuracy : null;
-    d.locationSource = "GPS";
-    d.locationUpdatedAt = now();
-    d.locationExpiresAt = now() + LOCATION_TTL_MS;
-  }
-
-  broadcast("DRIVER_UPDATED", publicDriver(d));
-  res.json(publicDriver(d));
-});
-
-app.post("/api/drivers/:driverId/location-link", (req, res) => {
-  const d = drivers.get(req.params.driverId);
-  if (!d) return res.status(404).json({ error: "driver_not_found" });
-
-  const link = String(req.body.link || "").trim();
-  if (!/^https:\/\/maps\.app\.goo\.gl\//i.test(link) &&
-      !/^https:\/\/www\.google\.com\/maps/i.test(link) &&
-      !/^https:\/\/maps\.google\.com\//i.test(link)) {
-    return res.status(400).json({ error: "invalid_google_maps_link" });
-  }
-
-  d.locationLink = link;
-  d.locationSource = "GOOGLE_MAPS_LINK";
-  d.locationUpdatedAt = now();
-  d.locationExpiresAt = now() + LOCATION_TTL_MS;
-
-  broadcast("DRIVER_UPDATED", publicDriver(d));
+app.get("/api/health", (_req, res) => {
   res.json({
-    ...publicDriver(d),
-    note: "Link recebido. O link do Maps é uma referência; para coordenadas automáticas, use GPS do app/PWA ou integração oficialmente suportada."
+    ok: true,
+    service: "rotas-go-location-resolver-test"
   });
 });
 
-app.post("/api/drivers/:driverId/location", (req, res) => {
-  const d = drivers.get(req.params.driverId);
-  if (!d) return res.status(404).json({ error: "driver_not_found" });
+app.post("/api/location/resolve", async (req, res) => {
+  const link = String(req.body.link || "").trim();
 
-  const lat = Number(req.body.lat);
-  const lng = Number(req.body.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return res.status(400).json({ error: "invalid_coordinates" });
+  if (!link) {
+    return res.status(400).json({
+      resolved: false,
+      error: "LINK_REQUIRED"
+    });
   }
 
-  d.lat = lat;
-  d.lng = lng;
-  d.accuracy = Number.isFinite(Number(req.body.accuracy)) ? Number(req.body.accuracy) : null;
-  d.locationSource = req.body.source === "RIDE_DESTINATION" ? "RIDE_DESTINATION" : "GPS";
-  d.locationUpdatedAt = now();
-  d.locationExpiresAt = now() + LOCATION_TTL_MS;
+  try {
+    const result = await resolveGoogleMapsLink(link);
 
-  if (d.status === "OFFLINE") d.status = "AVAILABLE";
-  broadcast("DRIVER_UPDATED", publicDriver(d));
-  res.json(publicDriver(d));
-});
+    if (result.resolved) {
+      const record = {
+        lat: result.lat,
+        lng: result.lng,
+        source: "GOOGLE_MAPS_SHARED_LINK",
+        sourceLink: link,
+        updatedAt: Date.now(),
+        expiresAt: Date.now() + TTL_MS
+      };
 
-app.post("/api/drivers/:driverId/shift/stop", (req, res) => {
-  const d = drivers.get(req.params.driverId);
-  if (!d) return res.status(404).json({ error: "driver_not_found" });
-  d.status = "OFFLINE";
-  d.locationExpiresAt = now();
-  broadcast("DRIVER_UPDATED", publicDriver(d));
-  res.json(publicDriver(d));
-});
+      cache.set(String(req.body.driverId || "TEST-DRIVER"), record);
 
-app.post("/api/drivers/:driverId/status", (req, res) => {
-  const d = drivers.get(req.params.driverId);
-  if (!d) return res.status(404).json({ error: "driver_not_found" });
-  const allowed = ["AVAILABLE", "OFFLINE"];
-  if (!allowed.includes(req.body.status)) return res.status(400).json({ error: "invalid_status" });
-  d.status = req.body.status;
-  broadcast("DRIVER_UPDATED", publicDriver(d));
-  res.json(publicDriver(d));
-});
-
-app.post("/api/rides", async (req, res) => {
-  const passengerId = String(req.body.passengerId || "PASSENGER-DEMO");
-  const pickup = {
-    lat: Number(req.body.pickupLat),
-    lng: Number(req.body.pickupLng),
-    label: String(req.body.pickupLabel || "Origem")
-  };
-  const destination = {
-    lat: req.body.destinationLat == null ? null : Number(req.body.destinationLat),
-    lng: req.body.destinationLng == null ? null : Number(req.body.destinationLng),
-    label: String(req.body.destinationLabel || "Destino")
-  };
-
-  if (!Number.isFinite(pickup.lat) || !Number.isFinite(pickup.lng)) {
-    return res.status(400).json({ error: "invalid_pickup_coordinates" });
-  }
-
-  const ride = {
-    id: id("RIDE"),
-    passengerId,
-    pickup,
-    destination,
-    status: "SEARCHING",
-    currentDriverId: null,
-    triedDriverIds: [],
-    searchRadiusKm: Number(req.body.searchRadiusKm || 10),
-    createdAt: now(),
-    updatedAt: now()
-  };
-
-  rides.set(ride.id, ride);
-  await offerNextDriver(ride);
-  res.status(201).json(ride);
-});
-
-app.post("/api/rides/:rideId/accept", (req, res) => {
-  const ride = rides.get(req.params.rideId);
-  if (!ride) return res.status(404).json({ error: "ride_not_found" });
-
-  const driverId = String(req.body.driverId || "");
-  if (ride.status !== "OFFERED" || ride.currentDriverId !== driverId) {
-    return res.status(409).json({ error: "ride_not_offered_to_driver" });
-  }
-
-  const d = drivers.get(driverId);
-  if (!d) return res.status(404).json({ error: "driver_not_found" });
-
-  d.status = "BUSY";
-  ride.status = "ACCEPTED";
-  ride.updatedAt = now();
-
-  sendToPassenger(ride.passengerId, "RIDE_ACCEPTED", ride);
-  broadcast("RIDE_UPDATED", ride);
-  broadcast("DRIVER_UPDATED", publicDriver(d));
-  res.json(ride);
-});
-
-app.post("/api/rides/:rideId/reject", async (req, res) => {
-  const ride = rides.get(req.params.rideId);
-  if (!ride) return res.status(404).json({ error: "ride_not_found" });
-
-  const driverId = String(req.body.driverId || "");
-  if (ride.status !== "OFFERED" || ride.currentDriverId !== driverId) {
-    return res.status(409).json({ error: "ride_not_offered_to_driver" });
-  }
-
-  const d = drivers.get(driverId);
-  if (d) d.status = "AVAILABLE";
-  ride.currentDriverId = null;
-  ride.status = "SEARCHING";
-  ride.updatedAt = now();
-
-  broadcast("DRIVER_UPDATED", d ? publicDriver(d) : null);
-  await offerNextDriver(ride);
-  res.json(ride);
-});
-
-app.post("/api/rides/:rideId/start", (req, res) => {
-  const ride = rides.get(req.params.rideId);
-  if (!ride) return res.status(404).json({ error: "ride_not_found" });
-  if (ride.status !== "ACCEPTED") return res.status(409).json({ error: "invalid_ride_state" });
-  ride.status = "IN_PROGRESS";
-  ride.updatedAt = now();
-  broadcast("RIDE_UPDATED", ride);
-  res.json(ride);
-});
-
-app.post("/api/rides/:rideId/complete", (req, res) => {
-  const ride = rides.get(req.params.rideId);
-  if (!ride) return res.status(404).json({ error: "ride_not_found" });
-
-  const d = ride.currentDriverId ? drivers.get(ride.currentDriverId) : null;
-  ride.status = "COMPLETED";
-  ride.updatedAt = now();
-
-  if (d) {
-    d.status = "AVAILABLE";
-    if (Number.isFinite(ride.destination.lat) && Number.isFinite(ride.destination.lng)) {
-      d.lat = ride.destination.lat;
-      d.lng = ride.destination.lng;
-      d.accuracy = null;
-      d.locationSource = "RIDE_DESTINATION";
-      d.locationUpdatedAt = now();
-      d.locationExpiresAt = now() + LOCATION_TTL_MS;
+      return res.json({
+        ...result,
+        location: record
+      });
     }
-    broadcast("DRIVER_UPDATED", publicDriver(d));
-  }
 
-  broadcast("RIDE_UPDATED", ride);
-  res.json({ ride, driver: d ? publicDriver(d) : null });
+    return res.status(422).json(result);
+  } catch (error) {
+    console.error(error);
+    return res.status(502).json({
+      resolved: false,
+      error: "MAPS_RESOLUTION_FAILED",
+      message: error.message
+    });
+  }
 });
 
-wss.on("connection", (ws, req) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const role = url.searchParams.get("role");
-  const entityId = url.searchParams.get("id");
+app.get("/api/location/:driverId", (req, res) => {
+  const record = cache.get(req.params.driverId);
 
-  if (role && entityId) sockets.set(`${role}:${entityId}`, ws);
+  if (!record) {
+    return res.status(404).json({
+      found: false,
+      message: "Nenhuma localização encontrada."
+    });
+  }
 
-  ws.send(JSON.stringify({
-    type: "CONNECTED",
-    payload: {
-      role,
-      entityId,
-      drivers: [...drivers.values()].map(publicDriver),
-      rides: [...rides.values()]
-    },
-    at: now()
-  }));
+  if (record.expiresAt <= Date.now()) {
+    cache.delete(req.params.driverId);
+    return res.status(410).json({
+      found: false,
+      expired: true
+    });
+  }
 
-  ws.on("close", () => {
-    if (role && entityId && sockets.get(`${role}:${entityId}`) === ws) {
-      sockets.delete(`${role}:${entityId}`);
-    }
+  res.json({
+    found: true,
+    location: record
   });
+});
+
+app.delete("/api/location/:driverId", (req, res) => {
+  cache.delete(req.params.driverId);
+  res.json({ ok: true });
 });
 
 setInterval(() => {
-  const t = now();
-  for (const d of drivers.values()) {
-    if (d.status !== "OFFLINE" && d.locationExpiresAt && d.locationExpiresAt <= t) {
-      if (d.status !== "BUSY") d.status = "OFFLINE";
-      broadcast("DRIVER_UPDATED", publicDriver(d));
-    }
+  const now = Date.now();
+  for (const [id, record] of cache) {
+    if (record.expiresAt <= now) cache.delete(id);
   }
 }, 10_000);
 
-server.listen(PORT, () => {
-  console.log(`Rotas GO Mobility MVP: http://localhost:${PORT}`);
+app.listen(PORT, () => {
+  console.log(`Rotas GO Location Resolver: http://localhost:${PORT}`);
 });

@@ -1,34 +1,17 @@
-# Rotas GO — Mobility MVP
+# Rotas GO — Location Resolver Test
 
-MVP local para testar a ideia:
+Este projeto testa experimentalmente:
 
-**motorista → localização → disponibilidade → cliente solicita → Dispatch Engine → oferta ao motorista mais próximo → aceitar/recusar → próximo motorista → finalizar → motorista volta a disponível**
-
-## O que já está implementado
-
-- Cadastro de motorista.
-- Início/encerramento de expediente.
-- Geolocalização real pelo navegador, quando disponível.
-- Atualização manual de posição para teste.
-- Expiração automática de localização (90 s por padrão).
-- Lista de motoristas disponíveis.
-- Busca por distância usando Haversine.
-- Dispatch para o motorista mais próximo.
-- Timeout de oferta (15 s).
-- Recusa → próximo motorista.
-- Aceite → motorista fica BUSY.
-- Finalização → motorista volta AVAILABLE.
-- Destino da corrida pode virar a última localização conhecida (`RIDE_DESTINATION`).
-- WebSocket para eventos em tempo real.
-- Não usa Google Maps API.
-- Não grava cada posição em banco permanente neste MVP.
-
-## Requisitos
-
-- Node.js 20+
-- navegador moderno
+Google Maps shared link
+→ backend
+→ redirect final
+→ tentativa de extração de latitude/longitude
+→ armazenamento temporário
+→ frontend consulta a posição.
 
 ## Rodar
+
+Requer Node.js 20+.
 
 ```bash
 npm install
@@ -41,56 +24,55 @@ Abra:
 http://localhost:3000
 ```
 
-Para testar GPS real, o navegador normalmente exige contexto seguro. `localhost` é tratado como contexto seguro pelos navegadores modernos. Em produção, use HTTPS.
+O campo já vem preenchido com o link de teste fornecido.
 
-## Testar o fluxo
+## Endpoint
 
-1. Cadastre um motorista.
-2. Clique em **Iniciar expediente**.
-3. Permita o GPS.
-4. Em outro navegador/aba, solicite uma corrida usando coordenadas próximas.
-5. O motorista recebe a oferta.
-6. Clique em **Recusar** e o sistema tenta outro motorista disponível.
-7. Clique em **Aceitar**.
-8. Depois, no MVP, as rotas de API podem ser usadas para iniciar/finalizar a corrida.
-9. Ao finalizar, o destino pode virar a localização conhecida do motorista.
+```http
+POST /api/location/resolve
+Content-Type: application/json
+```
 
-## API principal
+Exemplo:
 
-- `POST /api/drivers/register`
-- `POST /api/drivers/:id/shift/start`
-- `POST /api/drivers/:id/location`
-- `POST /api/drivers/:id/shift/stop`
-- `GET /api/drivers`
-- `POST /api/rides`
-- `POST /api/rides/:id/accept`
-- `POST /api/rides/:id/reject`
-- `POST /api/rides/:id/start`
-- `POST /api/rides/:id/complete`
-- `GET /api/rides`
-- `GET /api/health`
+```json
+{
+  "driverId": "DRV-34912",
+  "link": "https://maps.app.goo.gl/..."
+}
+```
 
-## Próxima evolução
+Se encontrar coordenadas:
 
-Este é um laboratório de arquitetura, não produção. Para produção:
+```json
+{
+  "resolved": true,
+  "lat": -16.123,
+  "lng": -49.123,
+  "location": {
+    "source": "GOOGLE_MAPS_SHARED_LINK",
+    "expiresAt": 178..."
+  }
+}
+```
 
-- Redis GEO para posições temporárias.
-- PostgreSQL para motoristas, passageiros, corridas, pagamentos e auditoria.
-- autenticação/JWT;
-- WhatsApp Business Platform para comunicação;
-- PWA ou app Android para localização em segundo plano;
-- regras de expiração e privacidade;
-- antifraude;
-- pagamentos;
-- painel de despacho;
-- múltiplas cidades/áreas;
-- cálculo de rota apenas quando necessário.
+## Atenção
 
+Este é um TESTE, não uma integração oficial do Google.
 
-## Link do Google Maps
+O resolver tenta extrair coordenadas de formatos públicos encontrados na URL final ou no HTML. O Google pode alterar o formato, exigir JavaScript, login ou impedir automação. Portanto, uma resposta `422` não significa que o link não contém uma localização; significa apenas que este protótipo não conseguiu extraí-la.
 
-O painel do motorista agora aceita um link como `https://maps.app.goo.gl/...`.
+Não use scraping desse tipo como base de produção sem verificar os termos e uma integração oficialmente suportada.
 
-O backend recebe em `POST /api/drivers/:id/location-link` e registra o link temporariamente.
+## Próximo teste
 
-**Importante:** o Google documenta que o link permite que outras pessoas vejam a localização compartilhada por até 24 horas, mas o link não equivale a uma API de GPS que entregue continuamente latitude/longitude ao nosso backend. Para o matching automático, a fonte ideal é o GPS do próprio PWA/app ou uma integração oficialmente suportada.
+Se este protótipo conseguir extrair as coordenadas do link real, podemos ligar:
+
+Google Maps link
+→ resolver
+→ Redis GEO
+→ WebSocket
+→ mapa do Rotas GO
+→ Dispatch Engine.
+
+A partir daí testamos vários motoristas simultaneamente.

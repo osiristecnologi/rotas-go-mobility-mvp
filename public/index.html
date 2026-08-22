@@ -3,60 +3,47 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Rotas GO — Mobility MVP</title>
+  <title>Rotas GO — Teste de localização</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header>
-    <h1>Rotas GO</h1>
-    <p>Teste do loop motorista → localização → despacho → corrida → disponibilidade.</p>
-  </header>
+<header>
+  <h1>Rotas GO</h1>
+  <p>Teste experimental: Google Maps → Backend → latitude/longitude → Frontend</p>
+</header>
 
-  <main class="grid">
-    <section class="card">
-      <h2>🚕 Motorista</h2>
-      <input id="driverName" value="Motorista Demo" placeholder="Nome">
-      <button id="registerDriver">Cadastrar motorista</button>
-      <div id="driverPanel" hidden>
-        <p>ID: <strong id="driverId"></strong></p>
-        <p>Status: <strong id="driverStatus">OFFLINE</strong></p>
-        <button id="startShift">🟢 Iniciar expediente</button>
-        <button id="sendLocation">📍 Atualizar localização pelo GPS</button>
-        <label for="mapsLink">Ou cole o link de localização do Google Maps:</label>
-        <input id="mapsLink" placeholder="https://maps.app.goo.gl/..." inputmode="url">
-        <button id="sendMapsLink">🔗 Enviar link do Maps</button>
-        <small class="muted">O MVP registra o link como referência. Ele não é um feed de GPS para o backend.</small>
-        <button id="stopShift">🔴 Encerrar expediente</button>
-        <div id="offer" class="offer" hidden></div>
-      </div>
-    </section>
+<main>
+  <section class="card">
+    <h2>🔗 Link de localização</h2>
 
-    <section class="card">
-      <h2>👤 Passageiro</h2>
-      <input id="pickupLabel" value="Rua 10, Setor X" placeholder="Origem">
-      <input id="destinationLabel" value="Centro" placeholder="Destino">
-      <div class="row">
-        <input id="pickupLat" type="number" step="any" value="-16.2697545">
-        <input id="pickupLng" type="number" step="any" value="-48.9514744">
-      </div>
-      <p class="muted">Use os botões de GPS para preencher a origem pelo aparelho.</p>
-      <button id="usePassengerGps">📍 Usar meu GPS</button>
-      <button id="requestRide">🚕 Solicitar corrida</button>
-      <div id="rideStatus"></div>
-    </section>
+    <label>Motorista/ID de teste</label>
+    <input id="driverId" value="DRV-TESTE-34912">
 
-    <section class="card full">
-      <h2>⚡ Dispatch / localização temporária</h2>
-      <p class="muted">As posições abaixo são temporárias. O MVP expira localização após 90 segundos.</p>
-      <div id="drivers"></div>
-    </section>
+    <label>Link do Google Maps</label>
+    <textarea id="mapsLink">https://maps.app.goo.gl/B3Xz5LwMmADe3Jcr6?g_st=ac</textarea>
 
-    <section class="card full">
-      <h2>📋 Corridas</h2>
-      <div id="rides"></div>
-    </section>
-  </main>
+    <button id="resolve">🔎 Resolver localização</button>
 
-  <script src="/app.js"></script>
+    <div id="result" class="result">Aguardando teste...</div>
+  </section>
+
+  <section class="card">
+    <h2>📍 Localização recebida pelo frontend</h2>
+    <pre id="location">Nenhuma localização.</pre>
+  </section>
+
+  <section class="card">
+    <h2>🔄 Loop experimental</h2>
+    <p>
+      Depois de resolver o link, o frontend consulta o backend periodicamente
+      para demonstrar o fluxo de localização temporária.
+    </p>
+    <button id="startLoop">▶ Iniciar loop</button>
+    <button id="stopLoop">⏹ Parar loop</button>
+    <p id="loopStatus">Loop parado.</p>
+  </section>
+</main>
+
+<script src="/app.js"></script>
 </body>
 </html>
