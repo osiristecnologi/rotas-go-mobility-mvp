@@ -467,15 +467,20 @@ function onMapClickForRoute(e) {
 }
 
 // ----- Buscar endereço por nome (Nominatim/OpenStreetMap, grátis) -----
-async function geocodeAddress(text) {
-  const query = text.trim();
+async function geocodeAddress(text, cityHint) {
+  let query = text.trim();
   if (!query) return null;
 
-  // viewbox = área de Goiás, prioriza resultados dentro do estado
+  // se o texto não menciona a cidade e temos uma dica (ex: cidade da origem), anexa
+  if (cityHint && !query.toLowerCase().includes(cityHint.toLowerCase())) {
+    query = `${query}, ${cityHint}`;
+  }
+
+  // viewbox = área de Goiás, restringe resultados ao estado
   const viewbox = "-53.4,-12.3,-45.8,-19.6";
   const url =
-    `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=0` +
-    `&viewbox=${viewbox}&bounded=0` +
+    `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1` +
+    `&viewbox=${viewbox}&bounded=1` +
     `&countrycodes=br&q=${encodeURIComponent(query + ", Goiás, Brasil")}`;
 
   const r = await fetch(url, {
@@ -484,10 +489,12 @@ async function geocodeAddress(text) {
   const results = await r.json();
   if (!results.length) return null;
 
+  const a = results[0].address || {};
   return {
     lat: Number(results[0].lat),
     lng: Number(results[0].lon),
     label: results[0].display_name,
+    city: a.city || a.town || a.municipality || a.village || null,
   };
 }
 
@@ -506,32 +513,39 @@ $("btnSearchAddresses").onclick = async () => {
   $("routeStatus").textContent = "Buscando endereços...";
 
   try {
+    let originFound = null;
+    let destFound = null;
+
     if (originText) {
-      const found = await geocodeAddress(originText);
-      if (!found) throw new Error(`Origem não encontrada: "${originText}"`);
-      originLatLng = [found.lat, found.lng];
+      originFound = await geocodeAddress(originText);
+      if (!originFound) throw new Error(`Origem não encontrada: "${originText}"`);
+      originLatLng = [originFound.lat, originFound.lng];
       if (originMarker) {
         originMarker.setLatLng(originLatLng);
       } else {
         originMarker = L.marker(originLatLng, {
           title: "Origem",
           icon: L.divIcon({ className: "", html: "🟢", iconSize: [24, 24] }),
-        }).addTo(map).bindPopup("Origem: " + found.label);
+        }).addTo(map);
       }
+      originMarker.bindPopup("Origem: " + originFound.label);
     }
 
     if (destText) {
-      const found = await geocodeAddress(destText);
-      if (!found) throw new Error(`Destino não encontrado: "${destText}"`);
-      destLatLng = [found.lat, found.lng];
+      // usa a cidade da origem como referência, se o texto do destino não citar uma cidade
+      const cityHint = originFound?.city || null;
+      destFound = await geocodeAddress(destText, cityHint);
+      if (!destFound) throw new Error(`Destino não encontrado: "${destText}"`);
+      destLatLng = [destFound.lat, destFound.lng];
       if (destMarker) {
         destMarker.setLatLng(destLatLng);
       } else {
         destMarker = L.marker(destLatLng, {
           title: "Destino",
           icon: L.divIcon({ className: "", html: "🏁", iconSize: [24, 24] }),
-        }).addTo(map).bindPopup("Destino: " + found.label);
+        }).addTo(map);
       }
+      destMarker.bindPopup("Destino: " + destFound.label);
     }
 
     const bounds = [];
@@ -543,11 +557,17 @@ $("btnSearchAddresses").onclick = async () => {
       map.setView(bounds[0], 15);
     }
 
+    // mostra os endereços resolvidos pra conferência antes de calcular a rota
+    const lines = [];
+    if (originFound) lines.push("🟢 " + originFound.label);
+    if (destFound) lines.push("🏁 " + destFound.label);
+
     $("routeStatus").className = "status ok";
-    $("routeStatus").textContent =
-      originLatLng && destLatLng
-        ? "Endereços encontrados. Clique em Calcular rota."
-        : "Endereço encontrado. Informe o outro ponto (busca ou clique no mapa).";
+    $("routeStatus").innerHTML =
+      lines.map((l) => `<div>${l}</div>`).join("") +
+      (originLatLng && destLatLng
+        ? "<div style='margin-top:4px'>Confira os endereços acima. Se estiver certo, clique em Calcular rota.</div>"
+        : "<div style='margin-top:4px'>Informe o outro ponto (busca ou clique no mapa).</div>");
   } catch (err) {
     $("routeStatus").className = "status err";
     $("routeStatus").textContent = err.message || "Erro ao buscar endereço";
