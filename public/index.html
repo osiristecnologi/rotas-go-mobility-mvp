@@ -3,46 +3,221 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Rotas GO — Resolver V3</title>
+<title>Rotas GO — Location Resolver V4</title>
 <style>
-body{margin:0;background:#f1f5f9;font-family:system-ui;color:#111827}
-header{background:#f97316;color:#fff;padding:24px 18px}
+*{box-sizing:border-box}
+body{margin:0;background:#f1f5f9;color:#111827;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{background:#f97316;color:white;padding:24px 18px}
+header h1{margin:0 0 6px;font-size:26px}
 main{max-width:850px;margin:18px auto;padding:0 14px}
-.card{background:#fff;border-radius:18px;padding:20px;margin-bottom:16px;box-shadow:0 3px 14px #0001}
+.card{background:white;border-radius:18px;padding:20px;margin-bottom:16px;box-shadow:0 3px 14px rgba(0,0,0,.08)}
 label{display:block;font-weight:800;margin-top:12px}
-input,textarea,button{width:100%;box-sizing:border-box;font:inherit;padding:13px;border-radius:11px;margin-top:7px}
-textarea{min-height:120px}
-button{border:0;background:#f97316;color:#fff;font-weight:800}
-.status{margin-top:14px;padding:14px;border-radius:10px;background:#f8fafc}
-pre{white-space:pre-wrap;background:#0f172a;color:#e2e8f0;padding:14px;border-radius:10px;overflow:auto}
-small{color:#64748b}
+input,textarea,button{width:100%;font:inherit;padding:13px;border-radius:11px;margin-top:7px}
+input,textarea{border:1px solid #cbd5e1}
+textarea{min-height:120px;resize:vertical}
+button{border:0;background:#f97316;color:#fff;font-weight:800;cursor:pointer}
+button:disabled{opacity:.6}
+.status{margin-top:14px;padding:14px;border-radius:11px;background:#f8fafc;font-weight:700}
+.status.ok{background:#ecfdf5;color:#047857}
+.status.err{background:#fef2f2;color:#b91c1c}
+.status.wait{background:#fffbeb;color:#a16207}
+pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e2e8f0;padding:14px;border-radius:11px;min-height:70px;overflow:auto}
+.badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#e2e8f0;margin-top:8px}
 </style>
 </head>
 <body>
 <header>
-<h1>🦈 Rotas GO — Resolver V3</h1>
-<div>Google Maps → Playwright → tentativa de lat/lng</div>
+<h1>🦈 Rotas GO — Resolver V4</h1>
+<div>Diagnóstico seguro: backend → Chromium → Google Maps → coordenadas</div>
 </header>
+
 <main>
 <section class="card">
 <h2>🔗 Localização compartilhada</h2>
-<label>Motorista / ID</label>
+
+<label for="driverId">Motorista / ID</label>
 <input id="driverId" value="DRV-TESTE-34912">
-<label>Link do Google Maps</label>
+
+<label for="mapsLink">Link do Google Maps</label>
 <textarea id="mapsLink">https://maps.app.goo.gl/B3Xz5LwMmADe3Jcr6?g_st=ac</textarea>
+
 <button id="resolve">🔎 Resolver localização</button>
-<div id="status" class="status">Aguardando...</div>
-<small id="version">Verificando backend...</small>
+
+<div id="status" class="status">Aguardando teste...</div>
+<div id="version" class="badge">Backend: verificando...</div>
 </section>
+
 <section class="card">
 <h2>📍 Resultado</h2>
 <pre id="result">Nenhum teste executado.</pre>
 </section>
+
 <section class="card">
 <h2>🧪 Diagnóstico</h2>
 <pre id="diagnostic">Nenhum diagnóstico.</pre>
 </section>
 </main>
-<script src="/app.js"></script>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function showJson(element, value) {
+  element.textContent = JSON.stringify(value, null, 2);
+}
+
+async function readResponse(response) {
+  const raw = await response.text();
+
+  if (!raw.trim()) {
+    return {
+      parseError: true,
+      httpStatus: response.status,
+      raw: ""
+    };
+  }
+
+  try {
+    return {
+      parseError: false,
+      httpStatus: response.status,
+      data: JSON.parse(raw)
+    };
+  } catch {
+    return {
+      parseError: true,
+      httpStatus: response.status,
+      raw: raw.slice(0, 2000)
+    };
+  }
+}
+
+async function checkBackend() {
+  try {
+    const response = await fetch("/health", { cache: "no-store" });
+    const result = await readResponse(response);
+
+    if (!result.parseError && result.data?.ok) {
+      $("version").textContent =
+        `Backend: V${result.data.version} — OK`;
+      return true;
+    }
+
+    $("version").textContent = "Backend: resposta inválida";
+    return false;
+  } catch (error) {
+    $("version").textContent = "Backend: não respondeu";
+    return false;
+  }
+}
+
+async function resolveLocation() {
+  const button = $("resolve");
+
+  button.disabled = true;
+  $("status").className = "status wait";
+  $("status").textContent = "🟡 Backend executando o teste...";
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+
+    const response = await fetch("/api/location/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        driverId: $("driverId").value.trim(),
+        link: $("mapsLink").value.trim()
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeout);
+
+    const result = await readResponse(response);
+
+    if (result.parseError) {
+      $("status").className = "status err";
+      $("status").textContent =
+        `🔴 Backend devolveu resposta vazia/não-JSON (HTTP ${result.httpStatus}).`;
+
+      showJson($("result"), {
+        resolved: false,
+        httpStatus: result.httpStatus,
+        clientError: result.raw
+          ? "Resposta não era JSON"
+          : "Resposta vazia"
+      });
+
+      $("diagnostic").textContent =
+        result.raw || "O backend encerrou a resposta sem conteúdo.";
+      return;
+    }
+
+    const data = result.data;
+
+    if (data.resolved === true && data.location) {
+      $("status").className = "status ok";
+      $("status").textContent = "🟢 Coordenadas encontradas!";
+
+      showJson($("result"), {
+        driverId: data.location.driverId,
+        latitude: data.location.lat,
+        longitude: data.location.lng,
+        source: data.location.source,
+        updatedAt: new Date(data.location.updatedAt).toLocaleString(),
+        expiresAt: new Date(data.location.expiresAt).toLocaleString(),
+        finalUrl: data.finalUrl,
+        matchedFrom: data.matchedFrom,
+        durationMs: data.durationMs
+      });
+
+      showJson($("diagnostic"), {
+        httpStatus: result.httpStatus,
+        stage: data.stage,
+        durationMs: data.durationMs,
+        finalUrl: data.finalUrl,
+        matchedFrom: data.matchedFrom
+      });
+    } else {
+      $("status").className = "status err";
+      $("status").textContent =
+        `🔴 ${data.reason || data.error || "Falha na resolução"}`;
+
+      showJson($("result"), data);
+
+      showJson($("diagnostic"), {
+        httpStatus: result.httpStatus,
+        stage: data.stage,
+        durationMs: data.durationMs,
+        error: data.error || null,
+        finalUrl: data.finalUrl || null,
+        title: data.title || null,
+        htmlLength: data.htmlLength || null,
+        visibleTextSample: data.visibleTextSample || []
+      });
+    }
+  } catch (error) {
+    $("status").className = "status err";
+    $("status").textContent =
+      error.name === "AbortError"
+        ? "🔴 Frontend cancelou por timeout."
+        : "🔴 Falha de comunicação com o backend.";
+
+    showJson($("result"), {
+      resolved: false,
+      clientError: error.message
+    });
+
+    $("diagnostic").textContent =
+      "O backend não conseguiu entregar uma resposta JSON completa.";
+  } finally {
+    button.disabled = false;
+    checkBackend();
+  }
+}
+
+$("resolve").addEventListener("click", resolveLocation);
+checkBackend();
+</script>
 </body>
 </html>

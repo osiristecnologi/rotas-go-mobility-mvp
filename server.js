@@ -3,39 +3,51 @@ import { chromium } from "playwright";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const TTL_MS = Number(process.env.LOCATION_TTL_MS || 90_000);
+const RESOLVE_TIMEOUT_MS = Number(process.env.RESOLVE_TIMEOUT_MS || 18000);
+const LOCATION_TTL_MS = Number(process.env.LOCATION_TTL_MS || 90000);
 
 app.use(express.json({ limit: "64kb" }));
 app.use(express.static("public"));
 
-const cache = new Map();
+const locations = new Map();
 
-function isGoogleMapsLink(value) {
+function json(res, status, payload) {
+  return res.status(status).type("application/json").send(JSON.stringify(payload));
+}
+
+function googleLink(value) {
   try {
     const u = new URL(value);
-    return /(^|\.)google\.com$|(^|\.)maps\.app\.goo\.gl$/.test(u.hostname);
+    return (
+      u.protocol === "https:" &&
+      (
+        u.hostname === "maps.app.goo.gl" ||
+        u.hostname === "goo.gl" ||
+        u.hostname === "google.com" ||
+        u.hostname.endsWith(".google.com")
+      )
+    );
   } catch {
     return false;
   }
 }
 
-function extractCoordinates(text) {
-  if (!text) return null;
+function extractCoordinates(value) {
+  const text = String(value ?? "");
 
   const patterns = [
+    /@(-?\d{1,3}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)/,
     /[?&](?:q|query|ll|center|destination|origin)=(-?\d{1,3}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)/i,
-    /@(-?\d{1,3}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)/i,
-    /!3d(-?\d{1,3}(?:\.\d+)?)!4d(-?\d{1,3}(?:\.\d+)?)/i,
-    /!1d(-?\d{1,3}(?:\.\d+)?)!2d(-?\d{1,3}(?:\.\d+)?)/i,
+    /!3d(-?\d{1,3}(?:\.\d+)?)!4d(-?\d{1,3}(?:\.\d+)?)/,
     /(-?\d{1,3}\.\d{5,})\s*[,;]\s*(-?\d{1,3}\.\d{5,})/
   ];
 
-  for (const re of patterns) {
-    const m = String(text).match(re);
-    if (!m) continue;
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
 
-    const lat = Number(m[1]);
-    const lng = Number(m[2]);
+    const lat = Number(match[1]);
+    const lng = Number(match[2]);
 
     if (
       Number.isFinite(lat) &&
@@ -43,27 +55,50 @@ function extractCoordinates(text) {
       Math.abs(lat) <= 90 &&
       Math.abs(lng) <= 180
     ) {
-      return { lat, lng, pattern: re.toString() };
+      return { lat, lng };
     }
   }
 
   return null;
 }
 
-async function inspect(link) {
-  const browser = await chromium.launch({
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-blink-features=AutomationControlled"
-    ]
+async function withTimeout(promise, ms) {
+  let timer;
+
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`RESOLVE_TIMEOUT_${ms}MS`)),
+      ms
+    );
   });
 
   try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function inspectGoogleLink(link) {
+  let browser;
+
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      timeout: 10000,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--no-zygote",
+        "--disable-blink-features=AutomationControlled"
+      ]
+    });
+
     const context = await browser.newContext({
       locale: "pt-BR",
+      viewport: { width: 390, height: 844 },
       userAgent:
         "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 " +
         "(KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36"
@@ -73,84 +108,107 @@ async function inspect(link) {
 
     await page.goto(link, {
       waitUntil: "domcontentloaded",
-      timeout: 30_000
+      timeout: 12000
     });
 
-    await page.waitForTimeout(6_000);
+    await page.waitForTimeout(2500);
 
     const finalUrl = page.url();
     const title = await page.title().catch(() => "");
-    const bodyText = await page.locator("body").innerText().catch(() => "");
-    const html = await page.content();
+    const visibleText = await page.locator("body").innerText().catch(() => "");
+    const html = await page.content().catch(() => "");
 
-    const candidates = [finalUrl, title, bodyText, html];
-
-    let coordinates = null;
-    let matchedFrom = null;
+    const candidates = [
+      { source: "final_url", value: finalUrl },
+      { source: "title", value: title },
+      { source: "visible_text", value: visibleText },
+      { source: "html", value: html }
+    ];
 
     for (const candidate of candidates) {
-      const found = extractCoordinates(candidate);
-      if (found) {
-        coordinates = found;
-        matchedFrom =
-          candidate === finalUrl ? "final_url" :
-          candidate === title ? "title" :
-          candidate === bodyText ? "visible_text" : "html";
-        break;
+      const coordinates = extractCoordinates(candidate.value);
+
+      if (coordinates) {
+        return {
+          resolved: true,
+          coordinates,
+          matchedFrom: candidate.source,
+          finalUrl,
+          title,
+          htmlLength: html.length
+        };
       }
     }
 
     return {
+      resolved: false,
       finalUrl,
       title,
-      coordinates,
-      matchedFrom,
       htmlLength: html.length,
-      visibleTextSample: bodyText
+      visibleTextSample: visibleText
         .split("\n")
         .map(x => x.trim())
         .filter(Boolean)
-        .slice(0, 80)
+        .slice(0, 50)
     };
   } finally {
-    await browser.close();
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
   }
 }
 
-app.get("/api/version", (_req, res) => {
+app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "3.0",
-    resolver: "playwright-google-maps",
+    service: "rotas-go-location-resolver",
+    version: "4.0",
+    uptimeSeconds: Math.round(process.uptime()),
     timestamp: new Date().toISOString()
   });
 });
 
+app.get("/api/version", (_req, res) => {
+  res.json({
+    ok: true,
+    version: "4.0",
+    resolver: "playwright-safe-resolver"
+  });
+});
+
 app.post("/api/location/resolve", async (req, res) => {
+  const startedAt = Date.now();
   const driverId = String(req.body?.driverId || "TEST-DRIVER").trim();
   const link = String(req.body?.link || "").trim();
 
-  if (!isGoogleMapsLink(link)) {
-    return res.status(400).json({
+  if (!googleLink(link)) {
+    return json(res, 400, {
       ok: false,
       resolved: false,
+      stage: "validation",
       error: "LINK_GOOGLE_MAPS_INVALIDO"
     });
   }
 
   try {
-    const inspected = await inspect(link);
+    const result = await withTimeout(
+      inspectGoogleLink(link),
+      RESOLVE_TIMEOUT_MS
+    );
 
-    if (!inspected.coordinates) {
-      return res.status(422).json({
+    const durationMs = Date.now() - startedAt;
+
+    if (!result.resolved) {
+      return json(res, 422, {
         ok: true,
         resolved: false,
+        stage: "coordinate-extraction",
         reason: "COORDENADAS_NAO_ENCONTRADAS",
-        finalUrl: inspected.finalUrl,
-        title: inspected.title,
-        htmlLength: inspected.htmlLength,
-        matchedFrom: inspected.matchedFrom,
-        visibleTextSample: inspected.visibleTextSample
+        durationMs,
+        finalUrl: result.finalUrl ?? null,
+        title: result.title ?? null,
+        htmlLength: result.htmlLength ?? null,
+        visibleTextSample: result.visibleTextSample ?? []
       });
     }
 
@@ -158,44 +216,49 @@ app.post("/api/location/resolve", async (req, res) => {
 
     const location = {
       driverId,
-      lat: inspected.coordinates.lat,
-      lng: inspected.coordinates.lng,
+      lat: result.coordinates.lat,
+      lng: result.coordinates.lng,
       source: "GOOGLE_MAPS_SHARED_LINK_TEST",
       updatedAt: now,
-      expiresAt: now + TTL_MS
+      expiresAt: now + LOCATION_TTL_MS
     };
 
-    cache.set(driverId, location);
+    locations.set(driverId, location);
 
-    return res.json({
+    return json(res, 200, {
       ok: true,
       resolved: true,
-      driverId,
-      lat: location.lat,
-      lng: location.lng,
-      source: location.source,
-      updatedAt: location.updatedAt,
-      expiresAt: location.expiresAt,
-      finalUrl: inspected.finalUrl,
-      matchedFrom: inspected.matchedFrom
+      stage: "complete",
+      durationMs,
+      location,
+      finalUrl: result.finalUrl,
+      matchedFrom: result.matchedFrom
     });
   } catch (error) {
-    console.error("RESOLVER_ERROR", error);
+    const durationMs = Date.now() - startedAt;
 
-    return res.status(502).json({
+    console.error("[RESOLVE]", {
+      driverId,
+      durationMs,
+      error: error?.stack || error?.message || String(error)
+    });
+
+    return json(res, 502, {
       ok: false,
       resolved: false,
-      error: "MAPS_BROWSER_RESOLUTION_FAILED",
-      message: error?.message || String(error)
+      stage: "browser",
+      error: error?.message || String(error),
+      durationMs
     });
   }
 });
 
 app.get("/api/location/:driverId", (req, res) => {
-  const location = cache.get(req.params.driverId);
+  const driverId = req.params.driverId;
+  const location = locations.get(driverId);
 
   if (!location) {
-    return res.status(404).json({
+    return json(res, 404, {
       ok: true,
       found: false,
       expired: false
@@ -203,15 +266,16 @@ app.get("/api/location/:driverId", (req, res) => {
   }
 
   if (location.expiresAt <= Date.now()) {
-    cache.delete(req.params.driverId);
-    return res.status(410).json({
+    locations.delete(driverId);
+
+    return json(res, 410, {
       ok: true,
       found: false,
       expired: true
     });
   }
 
-  res.json({
+  return res.json({
     ok: true,
     found: true,
     location
@@ -220,11 +284,14 @@ app.get("/api/location/:driverId", (req, res) => {
 
 setInterval(() => {
   const now = Date.now();
-  for (const [id, location] of cache) {
-    if (location.expiresAt <= now) cache.delete(id);
+
+  for (const [driverId, location] of locations) {
+    if (location.expiresAt <= now) {
+      locations.delete(driverId);
+    }
   }
-}, 10_000);
+}, 10000);
 
 app.listen(PORT, () => {
-  console.log(`Rotas GO Resolver V3 running on port ${PORT}`);
+  console.log(`[Rotas GO] V4 running on port ${PORT}`);
 });
