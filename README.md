@@ -1,20 +1,27 @@
-# Rotas GO — Location Resolver Test
+# Rotas GO — Location Resolver V2
 
-Este projeto testa experimentalmente:
+Esta versão muda o teste anterior.
+
+Agora o backend usa **Playwright (Chromium)** para abrir o link do Google Maps como um navegador real, esperar o carregamento e procurar coordenadas no conteúdo renderizado.
+
+Fluxo:
 
 Google Maps shared link
-→ backend
-→ redirect final
-→ tentativa de extração de latitude/longitude
-→ armazenamento temporário
-→ frontend consulta a posição.
+→ Playwright no backend
+→ redirect
+→ página renderizada
+→ URL/HTML/texto
+→ tentativa de latitude/longitude
+→ cache temporário
+→ frontend.
 
-## Rodar
+## Instalação
 
-Requer Node.js 20+.
+Node.js 20+ recomendado.
 
 ```bash
 npm install
+npx playwright install chromium
 npm start
 ```
 
@@ -24,55 +31,67 @@ Abra:
 http://localhost:3000
 ```
 
-O campo já vem preenchido com o link de teste fornecido.
+O link do teste já vem preenchido.
 
-## Endpoint
+## O que mudou
 
-```http
-POST /api/location/resolve
-Content-Type: application/json
+A versão anterior fazia somente `fetch()`.
+
+Agora:
+
+```text
+fetch()
+  ❌ pode não executar o JavaScript do Maps
+
+Playwright / Chromium
+  ✅ executa a página como navegador
 ```
 
-Exemplo:
+Isso aumenta bastante a chance de encontrar dados que só aparecem depois do carregamento da página.
 
-```json
-{
-  "driverId": "DRV-34912",
-  "link": "https://maps.app.goo.gl/..."
-}
+## Se aparecer "coordenadas não encontradas"
+
+Não significa necessariamente que o link não possui localização.
+
+O painel de diagnóstico mostrará:
+
+- URL final;
+- título da página;
+- tamanho do HTML;
+- parte do texto que o navegador conseguiu enxergar.
+
+Isso permite o próximo passo de engenharia.
+
+## Importante
+
+Isto é um laboratório/prova de conceito.
+
+Não estamos afirmando que o Google Maps oferece uma API pública para extrair a localização compartilhada por esses links. O Google pode mudar a página, exigir autenticação, bloquear automação ou não disponibilizar coordenadas ao navegador automatizado.
+
+Para produção, devemos usar uma fonte de localização oficialmente suportada ou o GPS do próprio PWA/app.
+
+## Objetivo final
+
+Se o experimento funcionar:
+
+```text
+Motorista
+  ↓
+compartilha localização
+  ↓
+link
+  ↓
+Rotas GO
+  ↓
+resolver
+  ↓
+lat/lng
+  ↓
+Redis GEO
+  ↓
+WebSocket
+  ↓
+mapa
+  ↓
+matching de corrida
 ```
-
-Se encontrar coordenadas:
-
-```json
-{
-  "resolved": true,
-  "lat": -16.123,
-  "lng": -49.123,
-  "location": {
-    "source": "GOOGLE_MAPS_SHARED_LINK",
-    "expiresAt": 178..."
-  }
-}
-```
-
-## Atenção
-
-Este é um TESTE, não uma integração oficial do Google.
-
-O resolver tenta extrair coordenadas de formatos públicos encontrados na URL final ou no HTML. O Google pode alterar o formato, exigir JavaScript, login ou impedir automação. Portanto, uma resposta `422` não significa que o link não contém uma localização; significa apenas que este protótipo não conseguiu extraí-la.
-
-Não use scraping desse tipo como base de produção sem verificar os termos e uma integração oficialmente suportada.
-
-## Próximo teste
-
-Se este protótipo conseguir extrair as coordenadas do link real, podemos ligar:
-
-Google Maps link
-→ resolver
-→ Redis GEO
-→ WebSocket
-→ mapa do Rotas GO
-→ Dispatch Engine.
-
-A partir daí testamos vários motoristas simultaneamente.

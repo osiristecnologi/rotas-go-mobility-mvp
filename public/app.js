@@ -1,5 +1,4 @@
 const $ = id => document.getElementById(id);
-
 let timer = null;
 
 async function api(url, options = {}) {
@@ -11,14 +10,17 @@ async function api(url, options = {}) {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.message || data.error || `HTTP ${response.status}`);
+    const error = new Error(data.message || data.error || `HTTP ${response.status}`);
+    error.data = data;
+    throw error;
   }
 
   return data;
 }
 
 $("resolve").onclick = async () => {
-  $("result").textContent = "Resolvendo link...";
+  $("status").textContent = "🟡 Abrindo Google Maps no navegador do backend...";
+  $("diagnostic").textContent = "Aguardando...";
 
   try {
     const data = await api("/api/location/resolve", {
@@ -29,69 +31,64 @@ $("resolve").onclick = async () => {
       })
     });
 
-    $("result").innerHTML = `
-      <b>✅ Localização encontrada</b>
-      <br>Latitude: ${data.lat}
-      <br>Longitude: ${data.lng}
-      <br>Status HTTP: ${data.status}
-      <br><small>URL final: ${escapeHtml(data.finalUrl)}</small>
-    `;
+    $("status").textContent = "🟢 Localização encontrada!";
 
-    renderLocation(data.location);
-  } catch (e) {
-    $("result").innerHTML =
-      `<b>❌ Não foi possível extrair coordenadas</b><br>${escapeHtml(e.message)}`;
+    $("result").textContent = JSON.stringify({
+      driverId: $("driverId").value.trim(),
+      latitude: data.lat,
+      longitude: data.lng,
+      source: data.location.source,
+      updatedAt: new Date(data.location.updatedAt).toLocaleString(),
+      expiresAt: new Date(data.location.expiresAt).toLocaleString()
+    }, null, 2);
+
+    $("diagnostic").textContent = JSON.stringify({
+      finalUrl: data.finalUrl,
+      matchedFrom: data.matchedFrom
+    }, null, 2);
+
+  } catch (error) {
+    $("status").textContent = "🔴 Coordenadas não encontradas neste teste.";
+
+    const data = error.data || {};
+    $("result").textContent = JSON.stringify({
+      resolved: false,
+      error: data.error || error.message,
+      reason: data.reason || null
+    }, null, 2);
+
+    $("diagnostic").textContent = JSON.stringify({
+      finalUrl: data.finalUrl || null,
+      title: data.title || null,
+      htmlLength: data.htmlLength || null,
+      visibleTextSample: data.visibleTextSample || []
+    }, null, 2);
   }
 };
-
-function renderLocation(data) {
-  if (!data) {
-    $("location").textContent = "Nenhuma localização.";
-    return;
-  }
-
-  $("location").textContent = JSON.stringify({
-    driverId: $("driverId").value,
-    latitude: data.lat,
-    longitude: data.lng,
-    source: data.source,
-    updatedAt: new Date(data.updatedAt).toLocaleString(),
-    expiresAt: new Date(data.expiresAt).toLocaleString()
-  }, null, 2);
-}
 
 async function poll() {
   const id = encodeURIComponent($("driverId").value.trim());
 
   try {
     const data = await api(`/api/location/${id}`);
-    renderLocation(data.location);
-    $("loopStatus").textContent =
-      `🟢 Última consulta: ${new Date().toLocaleTimeString()}`;
+
+    $("result").textContent = JSON.stringify(data.location, null, 2);
+    $("loop").textContent =
+      `🟢 Localização disponível — ${new Date().toLocaleTimeString()}`;
   } catch (e) {
-    $("loopStatus").textContent =
-      `🟡 ${e.message}`;
+    $("loop").textContent = `🟡 ${e.message}`;
   }
 }
 
-$("startLoop").onclick = () => {
+$("start").onclick = () => {
   if (timer) return;
   poll();
   timer = setInterval(poll, 5000);
-  $("loopStatus").textContent = "🟢 Loop ativo — consulta a cada 5 segundos.";
+  $("loop").textContent = "🟢 Loop ativo — 5 segundos.";
 };
 
-$("stopLoop").onclick = () => {
+$("stop").onclick = () => {
   clearInterval(timer);
   timer = null;
-  $("loopStatus").textContent = "⏹ Loop parado.";
+  $("loop").textContent = "⏹ Parado.";
 };
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}

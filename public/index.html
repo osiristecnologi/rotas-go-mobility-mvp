@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Rotas GO — Teste de localização</title>
+  <title>Rotas GO — Resolver V2</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header>
-  <h1>Rotas GO</h1>
-  <p>Teste experimental: Google Maps → Backend → latitude/longitude → Frontend</p>
+  <h1>🦈 Rotas GO — Teste V2</h1>
+  <p>Google Maps → navegador do backend → tentativa de obter localização</p>
 </header>
 
 <main>
   <section class="card">
-    <h2>🔗 Link de localização</h2>
+    <h2>🔗 Localização compartilhada</h2>
 
-    <label>Motorista/ID de teste</label>
+    <label>Motorista / ID</label>
     <input id="driverId" value="DRV-TESTE-34912">
 
     <label>Link do Google Maps</label>
@@ -24,23 +24,29 @@
 
     <button id="resolve">🔎 Resolver localização</button>
 
-    <div id="result" class="result">Aguardando teste...</div>
+    <div id="status" class="status">Aguardando...</div>
   </section>
 
   <section class="card">
-    <h2>📍 Localização recebida pelo frontend</h2>
-    <pre id="location">Nenhuma localização.</pre>
+    <h2>📍 Resultado</h2>
+    <pre id="result">Nenhuma localização recebida.</pre>
   </section>
 
   <section class="card">
-    <h2>🔄 Loop experimental</h2>
+    <h2>🧪 Diagnóstico</h2>
     <p>
-      Depois de resolver o link, o frontend consulta o backend periodicamente
-      para demonstrar o fluxo de localização temporária.
+      Se não encontrar coordenadas, mostramos a URL final e parte do texto
+      que o navegador do backend conseguiu enxergar. Isso é importante para
+      descobrir onde o Google está escondendo os dados.
     </p>
-    <button id="startLoop">▶ Iniciar loop</button>
-    <button id="stopLoop">⏹ Parar loop</button>
-    <p id="loopStatus">Loop parado.</p>
+    <pre id="diagnostic">Nenhum diagnóstico ainda.</pre>
+  </section>
+
+  <section class="card">
+    <h2>🔄 Loop de leitura</h2>
+    <button id="start">▶ Iniciar</button>
+    <button id="stop">⏹ Parar</button>
+    <div id="loop">Parado.</div>
   </section>
 </main>
 
