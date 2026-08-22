@@ -105,7 +105,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#94a3b8;
       <label>Destino (endereço, bairro, rua...)</label>
       <input id="destText" placeholder="Ex: Lote 12, Jardim América, Goiânia" autocomplete="off">
       <button id="btnSearchAddresses" class="secondary" style="margin-top:8px">🔎 Buscar endereços</button>
-      <p class="hint">Dica: quanto mais completo (rua + bairro + cidade), melhor a precisão. A busca usa o geocodificador gratuito OpenStreetMap (Nominatim).</p>
+      <p class="hint">Dica: quanto mais completo (rua + bairro + cidade), melhor a precisão. A busca usa o geocodificador gratuito OpenStreetMap (Nominatim). Se a rua for muito nova ou informal (ex: "VP-05" de loteamento) e não estiver mapeada, o sistema avisa "aproximado" — nesse caso, arraste o pino 🟢/🏁 no mapa até o ponto certo.</p>
 
       <div class="row" style="margin-top:12px">
         <button id="btnPickOrigin" class="secondary">📍 Marcar origem no mapa</button>
@@ -446,8 +446,13 @@ function onMapClickForRoute(e) {
     } else {
       originMarker = L.marker(latlng, {
         title: "Origem",
+        draggable: true,
         icon: L.divIcon({ className: "", html: "🟢", iconSize: [24, 24] }),
       }).addTo(map).bindPopup("Origem");
+      originMarker.on("dragend", () => {
+        const p = originMarker.getLatLng();
+        originLatLng = [p.lat, p.lng];
+      });
     }
   } else if (pickMode === "destino") {
     destLatLng = latlng;
@@ -456,8 +461,13 @@ function onMapClickForRoute(e) {
     } else {
       destMarker = L.marker(latlng, {
         title: "Destino",
+        draggable: true,
         icon: L.divIcon({ className: "", html: "🏁", iconSize: [24, 24] }),
       }).addTo(map).bindPopup("Destino");
+      destMarker.on("dragend", () => {
+        const p = destMarker.getLatLng();
+        destLatLng = [p.lat, p.lng];
+      });
     }
   }
 
@@ -495,7 +505,17 @@ async function geocodeAddress(text, cityHint) {
     lng: Number(results[0].lon),
     label: results[0].display_name,
     city: a.city || a.town || a.municipality || a.village || null,
+    // "class"/"type" indicam o nível de precisão do resultado
+    osmClass: results[0].class || null,
+    osmType: results[0].type || null,
   };
+}
+
+// nível de precisão aproximado a partir da classe/tipo devolvido pelo Nominatim
+function isPreciseMatch(found) {
+  if (!found) return false;
+  const precise = ["house", "building", "residential", "road", "primary", "secondary", "tertiary", "living_street", "unclassified"];
+  return precise.includes(found.osmType) || found.osmClass === "building";
 }
 
 $("btnSearchAddresses").onclick = async () => {
@@ -525,8 +545,13 @@ $("btnSearchAddresses").onclick = async () => {
       } else {
         originMarker = L.marker(originLatLng, {
           title: "Origem",
+          draggable: true,
           icon: L.divIcon({ className: "", html: "🟢", iconSize: [24, 24] }),
         }).addTo(map);
+        originMarker.on("dragend", () => {
+          const p = originMarker.getLatLng();
+          originLatLng = [p.lat, p.lng];
+        });
       }
       originMarker.bindPopup("Origem: " + originFound.label);
     }
@@ -542,8 +567,13 @@ $("btnSearchAddresses").onclick = async () => {
       } else {
         destMarker = L.marker(destLatLng, {
           title: "Destino",
+          draggable: true,
           icon: L.divIcon({ className: "", html: "🏁", iconSize: [24, 24] }),
         }).addTo(map);
+        destMarker.on("dragend", () => {
+          const p = destMarker.getLatLng();
+          destLatLng = [p.lat, p.lng];
+        });
       }
       destMarker.bindPopup("Destino: " + destFound.label);
     }
@@ -559,8 +589,14 @@ $("btnSearchAddresses").onclick = async () => {
 
     // mostra os endereços resolvidos pra conferência antes de calcular a rota
     const lines = [];
-    if (originFound) lines.push("🟢 " + originFound.label);
-    if (destFound) lines.push("🏁 " + destFound.label);
+    if (originFound) {
+      const warn = isPreciseMatch(originFound) ? "" : " ⚠️ aproximado (rua não encontrada, arraste o pino se precisar)";
+      lines.push("🟢 " + originFound.label + warn);
+    }
+    if (destFound) {
+      const warn = isPreciseMatch(destFound) ? "" : " ⚠️ aproximado (rua não encontrada, arraste o pino se precisar)";
+      lines.push("🏁 " + destFound.label + warn);
+    }
 
     $("routeStatus").className = "status ok";
     $("routeStatus").innerHTML =
