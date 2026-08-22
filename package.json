@@ -1,13 +1,12 @@
 {
-  "name": "rotas-go-location-resolver-v4",
-  "version": "0.5.1",
+  "name": "rotas-go-location-resolver-minimal",
+  "version": "0.5.1-minimal",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^5.1.0",
-    "playwright": "^1.55.0"
+    "express": "^5.1.0"
   }
 }
