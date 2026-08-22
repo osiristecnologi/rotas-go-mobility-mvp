@@ -2,112 +2,124 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>Rotas GO — Localização ao Vivo</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Rotas GO — Goiás ao Vivo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#f1f5f9;color:#111827;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-header{background:#f97316;color:#fff;padding:20px 16px}
-header h1{margin:0 0 4px;font-size:22px}
-header p{margin:0;opacity:.9;font-size:13px}
-main{max-width:520px;margin:14px auto;padding:0 12px 40px}
-.card{background:#fff;border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 2px 12px rgba(0,0,0,.07)}
-h2{margin:0 0 12px;font-size:17px}
-label{display:block;font-weight:700;font-size:13px;margin-top:10px}
-input,button{width:100%;font:inherit;padding:12px;border-radius:10px;margin-top:6px}
-input{border:1px solid #cbd5e1}
-button{border:0;background:#f97316;color:#fff;font-weight:800;cursor:pointer}
-button.secondary{background:#64748b}
+body{margin:0;background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{background:#f97316;color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+header h1{margin:0;font-size:18px}
+header .sub{font-size:11px;opacity:.9}
+main{max-width:900px;margin:0 auto;padding:10px}
+.card{background:#1e293b;border-radius:14px;padding:14px;margin-bottom:10px;border:1px solid #334155}
+h2{margin:0 0 10px;font-size:15px;color:#f8fafc}
+label{display:block;font-weight:700;font-size:12px;margin-top:8px;color:#94a3b8}
+input,button,select{width:100%;font:inherit;padding:11px;border-radius:10px;margin-top:5px;border:0}
+input,select{background:#0f172a;color:#e2e8f0;border:1px solid #475569}
+button{background:#f97316;color:#fff;font-weight:800;cursor:pointer}
+button.secondary{background:#475569}
 button.danger{background:#dc2626}
-button:disabled{opacity:.55}
-.status{margin-top:12px;padding:12px;border-radius:10px;font-weight:700;font-size:14px;background:#f8fafc}
-.status.ok{background:#ecfdf5;color:#047857}
-.status.err{background:#fef2f2;color:#b91c1c}
-.status.wait{background:#fffbeb;color:#a16207}
-pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:10px;font-size:12px;min-height:60px}
+button:disabled{opacity:.5}
 .row{display:flex;gap:8px}
-.row button{flex:1}
-.badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#e2e8f0;font-size:12px;margin-right:4px}
-.tabs{display:flex;gap:6px;margin-bottom:14px}
-.tabs button{background:#e2e8f0;color:#334155}
-.tabs button.active{background:#f97316;color:#fff}
-.hint{font-size:12px;color:#64748b;margin-top:8px;line-height:1.4}
-#mapLink{font-size:13px;word-break:break-all}
+.row>*{flex:1}
+.status{margin-top:10px;padding:10px;border-radius:10px;font-weight:700;font-size:13px;background:#0f172a}
+.status.ok{background:#064e3b;color:#6ee7b7}
+.status.err{background:#7f1d1d;color:#fecaca}
+.status.wait{background:#78350f;color:#fde68a}
+#map{height:380px;border-radius:12px;border:1px solid #334155;z-index:1}
+.tabs{display:flex;gap:6px;margin-bottom:10px}
+.tabs button{background:#334155}
+.tabs button.active{background:#f97316}
+.badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#334155;font-size:11px;margin-right:4px}
+.hint{font-size:11px;color:#94a3b8;margin-top:6px;line-height:1.4}
+pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#94a3b8;padding:10px;border-radius:10px;font-size:11px;max-height:120px;overflow:auto}
+.leaflet-container{background:#1e293b}
 </style>
 </head>
 <body>
 <header>
-  <h1>🦈 Rotas GO — Ao Vivo</h1>
-  <p>Localização real do dispositivo · sem scraping</p>
+  <div>
+    <h1>🦈 Rotas GO — Goiás</h1>
+    <div class="sub">Localização ao vivo · mapa do estado</div>
+  </div>
+  <div>
+    <span id="backendBadge" class="badge">…</span>
+    <span id="activeBadge" class="badge">0 ativos</span>
+  </div>
 </header>
 
 <main>
   <div class="tabs">
     <button id="tabDriver" class="active">📱 Motorista</button>
-    <button id="tabViewer">👁 Acompanhar</button>
+    <button id="tabViewer">🗺 Painel</button>
   </div>
 
-  <!-- ===== ABA MOTORISTA ===== -->
+  <!-- MOTORISTA -->
   <section id="panelDriver">
     <div class="card">
-      <h2>Compartilhar minha localização</h2>
-
+      <h2>Compartilhar localização</h2>
       <label>ID do Motorista</label>
-      <input id="driverId" value="DRV-TESTE-34912">
+      <input id="driverId" value="DRV-TESTE-34912" autocomplete="off">
 
       <div class="row" style="margin-top:12px">
-        <button id="btnStart">▶ Iniciar envio</button>
+        <button id="btnStart">▶ Iniciar</button>
         <button id="btnStop" class="danger" disabled>■ Parar</button>
       </div>
-
-      <div id="driverStatus" class="status">Parado. Clique em Iniciar e permita a localização.</div>
+      <div id="driverStatus" class="status">Parado. Mantenha a tela ligada para melhor persistência.</div>
       <p class="hint">
-        O celular vai pedir permissão de localização.
-        Enquanto estiver ativo, a posição é enviada a cada 8 segundos.
+        Use um ID simples (ex: DRV-34912). O envio continua enquanto a aba estiver aberta.
+        Se o celular bloquear a tela por muito tempo, o navegador pode pausar o GPS.
       </p>
     </div>
-
     <div class="card">
       <h2>Último envio</h2>
       <pre id="driverLog">Nenhum envio ainda.</pre>
     </div>
   </section>
 
-  <!-- ===== ABA ACOMPANHAR ===== -->
+  <!-- PAINEL / MAPA -->
   <section id="panelViewer" style="display:none">
     <div class="card">
-      <h2>Acompanhar motorista</h2>
-
+      <h2>Acompanhar no mapa (Goiás)</h2>
       <label>ID do Motorista</label>
-      <input id="watchId" value="DRV-TESTE-34912">
+      <input id="watchId" value="DRV-TESTE-34912" autocomplete="off">
 
       <div class="row" style="margin-top:12px">
-        <button id="btnWatchStart">▶ Iniciar leitura</button>
+        <button id="btnWatchStart">▶ Acompanhar</button>
         <button id="btnWatchStop" class="secondary" disabled>■ Parar</button>
       </div>
+      <div id="viewerStatus" class="status">Informe o ID e clique em Acompanhar.</div>
+    </div>
 
-      <div id="viewerStatus" class="status">Aguardando...</div>
+    <div class="card" style="padding:8px">
+      <div id="map"></div>
     </div>
 
     <div class="card">
-      <h2>Posição atual</h2>
-      <pre id="viewerResult">Nenhuma posição.</pre>
+      <h2>Dados</h2>
+      <pre id="viewerResult">—</pre>
       <p id="mapLink" class="hint"></p>
     </div>
   </section>
-
-  <div class="card">
-    <span id="backendBadge" class="badge">Backend: verificando...</span>
-    <span id="activeBadge" class="badge">Ativos: —</span>
-  </div>
 </main>
 
 <script>
 const $ = id => document.getElementById(id);
 
+// ----- Goiás bounds (aprox.) -----
+const GOIAS_BOUNDS = L.latLngBounds(
+  [-19.6, -53.4], // SW
+  [-12.3, -45.8]  // NE
+);
+const GOIAS_CENTER = [-16.0, -49.5];
+
+let map, marker, accuracyCircle;
+let sendWatchId = null;
 let sendTimer = null;
 let watchTimer = null;
-let watchId = null;
+let wakeLock = null;
 
 // ----- Tabs -----
 $("tabDriver").onclick = () => {
@@ -121,40 +133,143 @@ $("tabViewer").onclick = () => {
   $("tabDriver").classList.remove("active");
   $("panelDriver").style.display = "none";
   $("panelViewer").style.display = "";
+  setTimeout(() => {
+    if (!map) initMap();
+    else map.invalidateSize();
+  }, 80);
 };
 
-// ----- Backend check -----
+// ----- Map -----
+function initMap() {
+  map = L.map("map", {
+    center: GOIAS_CENTER,
+    zoom: 7,
+    maxBounds: GOIAS_BOUNDS.pad(0.15),
+    maxBoundsViscosity: 0.8,
+    minZoom: 6,
+    maxZoom: 18,
+  });
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap",
+    maxZoom: 19,
+  }).addTo(map);
+
+  // leve destaque da área de Goiás
+  L.rectangle(GOIAS_BOUNDS, {
+    color: "#f97316",
+    weight: 1,
+    fillOpacity: 0.03,
+    interactive: false,
+  }).addTo(map);
+}
+
+function updateMarker(lat, lng, accuracy) {
+  if (!map) initMap();
+
+  const latlng = [lat, lng];
+
+  if (!marker) {
+    marker = L.marker(latlng, { title: "Motorista" }).addTo(map);
+    marker.bindPopup("Motorista").openPopup();
+  } else {
+    marker.setLatLng(latlng);
+  }
+
+  if (accuracyCircle) {
+    accuracyCircle.setLatLng(latlng).setRadius(accuracy || 30);
+  } else {
+    accuracyCircle = L.circle(latlng, {
+      radius: accuracy || 30,
+      color: "#38bdf8",
+      fillColor: "#38bdf8",
+      fillOpacity: 0.15,
+      weight: 1,
+    }).addTo(map);
+  }
+
+  // se estiver longe, centraliza; se perto, só move um pouco
+  const zoom = map.getZoom();
+  if (zoom < 12) {
+    map.setView(latlng, 14, { animate: true });
+  } else {
+    map.panTo(latlng, { animate: true });
+  }
+}
+
+// ----- Backend -----
 async function checkBackend() {
   try {
     const r = await fetch("/health", { cache: "no-store" });
     const d = await r.json();
     if (d.ok) {
-      $("backendBadge").textContent = `Backend: V${d.version} — OK`;
-      $("activeBadge").textContent = `Ativos: ${d.activeDrivers ?? 0}`;
-    } else {
-      $("backendBadge").textContent = "Backend: resposta estranha";
+      $("backendBadge").textContent = `V${d.version}`;
+      $("activeBadge").textContent = `${d.activeDrivers ?? 0} ativos`;
     }
   } catch {
-    $("backendBadge").textContent = "Backend: offline";
+    $("backendBadge").textContent = "offline";
   }
 }
 
-// ----- Motorista: enviar localização -----
-function getPosition() {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error("Geolocalização não suportada neste navegador"));
-      return;
+// ----- Wake Lock (tenta manter tela ligada) -----
+async function requestWakeLock() {
+  try {
+    if ("wakeLock" in navigator) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => {
+        console.log("Wake lock released");
+      });
     }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve(pos),
-      (err) => reject(err),
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 }
-    );
-  });
+  } catch (e) {
+    console.log("Wake lock não disponível", e);
+  }
 }
 
-async function sendOnce() {
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+}
+
+// Re-adquire wake lock quando a aba volta
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && sendWatchId != null) {
+    requestWakeLock();
+  }
+});
+
+// ----- Motorista -----
+async function sendPosition(pos) {
+  const driverId = $("driverId").value.trim();
+  if (!driverId) return;
+
+  const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+
+  try {
+    const res = await fetch("/api/location/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ driverId, lat, lng, accuracy }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "falha");
+
+    $("driverStatus").className = "status ok";
+    $("driverStatus").textContent = `Enviado · ~${Math.round(accuracy || 0)} m · ${new Date().toLocaleTimeString()}`;
+    $("driverLog").textContent = JSON.stringify(
+      { driverId, lat, lng, accuracy, updatedAt: new Date().toLocaleString() },
+      null,
+      2
+    );
+    checkBackend();
+  } catch (err) {
+    $("driverStatus").className = "status err";
+    $("driverStatus").textContent = err.message || "Erro ao enviar";
+  }
+}
+
+function startSending() {
   const driverId = $("driverId").value.trim();
   if (!driverId) {
     $("driverStatus").className = "status err";
@@ -162,82 +277,77 @@ async function sendOnce() {
     return;
   }
 
-  try {
-    $("driverStatus").className = "status wait";
-    $("driverStatus").textContent = "Obtendo localização...";
-
-    const pos = await getPosition();
-    const { latitude: lat, longitude: lng, accuracy } = pos.coords;
-
-    const res = await fetch("/api/location/update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ driverId, lat, lng, accuracy }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || "Falha ao salvar");
-    }
-
-    $("driverStatus").className = "status ok";
-    $("driverStatus").textContent = `Enviado · precisão ~${Math.round(accuracy || 0)} m`;
-
-    $("driverLog").textContent = JSON.stringify(
-      {
-        driverId,
-        lat,
-        lng,
-        accuracy,
-        updatedAt: new Date().toLocaleString(),
-      },
-      null,
-      2
-    );
-
-    checkBackend();
-  } catch (err) {
+  if (!navigator.geolocation) {
     $("driverStatus").className = "status err";
-    $("driverStatus").textContent =
-      err.code === 1
-        ? "Permissão de localização negada"
-        : err.message || "Erro ao obter/enviar localização";
+    $("driverStatus").textContent = "GPS não suportado";
+    return;
   }
-}
 
-$("btnStart").onclick = () => {
   $("btnStart").disabled = true;
   $("btnStop").disabled = false;
-  sendOnce();
-  sendTimer = setInterval(sendOnce, 8000);
-};
+  $("driverStatus").className = "status wait";
+  $("driverStatus").textContent = "Solicitando GPS...";
 
-$("btnStop").onclick = () => {
-  if (sendTimer) clearInterval(sendTimer);
-  sendTimer = null;
+  requestWakeLock();
+
+  // watchPosition é mais persistente que setInterval + getCurrentPosition
+  sendWatchId = navigator.geolocation.watchPosition(
+    (pos) => sendPosition(pos),
+    (err) => {
+      $("driverStatus").className = "status err";
+      $("driverStatus").textContent =
+        err.code === 1 ? "Permissão negada" : err.message || "Erro no GPS";
+    },
+    {
+      enableHighAccuracy: true,
+      maximumAge: 4000,
+      timeout: 15000,
+    }
+  );
+
+  // backup: força envio periódico caso o watch fique quieto
+  sendTimer = setInterval(() => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => sendPosition(pos),
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 8000, timeout: 10000 }
+    );
+  }, 10000);
+}
+
+function stopSending() {
+  if (sendWatchId != null) {
+    navigator.geolocation.clearWatch(sendWatchId);
+    sendWatchId = null;
+  }
+  if (sendTimer) {
+    clearInterval(sendTimer);
+    sendTimer = null;
+  }
+  releaseWakeLock();
   $("btnStart").disabled = false;
   $("btnStop").disabled = true;
   $("driverStatus").className = "status";
   $("driverStatus").textContent = "Parado.";
-};
+}
 
-// ----- Acompanhar -----
+$("btnStart").onclick = startSending;
+$("btnStop").onclick = stopSending;
+
+// ----- Painel / Acompanhar -----
 async function watchOnce() {
   const id = $("watchId").value.trim();
   if (!id) return;
 
   try {
-    const res = await fetch(`/api/location/${encodeURIComponent(id)}`, {
-      cache: "no-store",
-    });
+    const res = await fetch(`/api/location/${encodeURIComponent(id)}`, { cache: "no-store" });
     const data = await res.json();
 
     if (!data.found) {
       $("viewerStatus").className = "status err";
       $("viewerStatus").textContent = data.expired
-        ? "Localização expirou (sem atualização recente)"
-        : "Motorista ainda não enviou localização";
+        ? "Expirou (sem atualização recente)"
+        : "Motorista ainda não enviou";
       $("viewerResult").textContent = JSON.stringify(data, null, 2);
       $("mapLink").textContent = "";
       return;
@@ -247,15 +357,14 @@ async function watchOnce() {
     const age = Math.round((Date.now() - loc.updatedAt) / 1000);
 
     $("viewerStatus").className = "status ok";
-    $("viewerStatus").textContent = `Ao vivo · atualizado há ${age}s · precisão ~${Math.round(loc.accuracy || 0)} m`;
+    $("viewerStatus").textContent = `Ao vivo · há ${age}s · ~${Math.round(loc.accuracy || 0)} m`;
 
     $("viewerResult").textContent = JSON.stringify(
       {
         driverId: loc.driverId,
-        latitude: loc.lat,
-        longitude: loc.lng,
+        lat: loc.lat,
+        lng: loc.lng,
         accuracy: loc.accuracy,
-        source: loc.source,
         updatedAt: new Date(loc.updatedAt).toLocaleString(),
         ageSeconds: age,
       },
@@ -263,9 +372,11 @@ async function watchOnce() {
       2
     );
 
-    $("mapLink").innerHTML = `<a href="https://www.google.com/maps?q=${loc.lat},${loc.lng}" target="_blank" rel="noopener">Abrir no Google Maps →</a>`;
+    $("mapLink").innerHTML = `<a style="color:#38bdf8" href="https://www.google.com/maps?q=${loc.lat},${loc.lng}" target="_blank" rel="noopener">Abrir no Google Maps →</a>`;
+
+    updateMarker(loc.lat, loc.lng, loc.accuracy);
     checkBackend();
-  } catch (err) {
+  } catch {
     $("viewerStatus").className = "status err";
     $("viewerStatus").textContent = "Erro de comunicação";
   }
@@ -274,8 +385,9 @@ async function watchOnce() {
 $("btnWatchStart").onclick = () => {
   $("btnWatchStart").disabled = true;
   $("btnWatchStop").disabled = false;
+  if (!map) initMap();
   watchOnce();
-  watchTimer = setInterval(watchOnce, 5000);
+  watchTimer = setInterval(watchOnce, 4000);
 };
 
 $("btnWatchStop").onclick = () => {
@@ -284,11 +396,11 @@ $("btnWatchStop").onclick = () => {
   $("btnWatchStart").disabled = false;
   $("btnWatchStop").disabled = true;
   $("viewerStatus").className = "status";
-  $("viewerStatus").textContent = "Leitura parada.";
+  $("viewerStatus").textContent = "Parado.";
 };
 
 checkBackend();
-setInterval(checkBackend, 20000);
+setInterval(checkBackend, 15000);
 </script>
 </body>
 </html>
