@@ -98,6 +98,25 @@ pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#94a3b8;
     </div>
 
     <div class="card">
+      <h2>🧭 Calcular rota (grátis · OSRM)</h2>
+      <div class="row">
+        <button id="btnPickOrigin" class="secondary">📍 Marcar origem</button>
+        <button id="btnPickDest" class="secondary">🏁 Marcar destino</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="btnCalcRoute">Calcular rota</button>
+        <button id="btnClearRoute" class="secondary">✕ Limpar</button>
+      </div>
+      <div id="routeStatus" class="status">Marque origem e destino no mapa.</div>
+      <p class="hint">Clique nos botões acima e depois clique no mapa para marcar cada ponto. O cálculo usa o servidor público do OSRM (grátis, sem chave de API) — ideal para testes.</p>
+    </div>
+
+    <div class="card">
+      <h2>🟢 Motoristas online</h2>
+      <div id="driversList" class="hint">Carregando...</div>
+    </div>
+
+    <div class="card">
       <h2>Dados</h2>
       <pre id="viewerResult">—</pre>
       <p id="mapLink" class="hint"></p>
@@ -162,6 +181,8 @@ function initMap() {
     fillOpacity: 0.03,
     interactive: false,
   }).addTo(map);
+
+  map.on("click", onMapClickForRoute);
 }
 
 function updateMarker(lat, lng, accuracy) {
@@ -399,8 +420,155 @@ $("btnWatchStop").onclick = () => {
   $("viewerStatus").textContent = "Parado.";
 };
 
+// ----- Calcular rota (OSRM, grátis) -----
+let routeLine = null;
+let originMarker = null;
+let destMarker = null;
+let pickMode = null; // "origin" | "destino" | null
+let originLatLng = null;
+let destLatLng = null;
+
+function onMapClickForRoute(e) {
+  if (!pickMode) return;
+  const latlng = [e.latlng.lat, e.latlng.lng];
+
+  if (pickMode === "origin") {
+    originLatLng = latlng;
+    if (originMarker) {
+      originMarker.setLatLng(latlng);
+    } else {
+      originMarker = L.marker(latlng, {
+        title: "Origem",
+        icon: L.divIcon({ className: "", html: "🟢", iconSize: [24, 24] }),
+      }).addTo(map).bindPopup("Origem");
+    }
+  } else if (pickMode === "destino") {
+    destLatLng = latlng;
+    if (destMarker) {
+      destMarker.setLatLng(latlng);
+    } else {
+      destMarker = L.marker(latlng, {
+        title: "Destino",
+        icon: L.divIcon({ className: "", html: "🏁", iconSize: [24, 24] }),
+      }).addTo(map).bindPopup("Destino");
+    }
+  }
+
+  pickMode = null;
+  $("routeStatus").className = "status ok";
+  $("routeStatus").textContent = "Ponto marcado. Marque o outro ponto ou clique em Calcular rota.";
+}
+
+$("btnPickOrigin").onclick = () => {
+  if (!map) initMap();
+  pickMode = "origin";
+  $("routeStatus").className = "status wait";
+  $("routeStatus").textContent = "Clique no mapa para marcar a ORIGEM.";
+};
+
+$("btnPickDest").onclick = () => {
+  if (!map) initMap();
+  pickMode = "destino";
+  $("routeStatus").className = "status wait";
+  $("routeStatus").textContent = "Clique no mapa para marcar o DESTINO.";
+};
+
+$("btnClearRoute").onclick = () => {
+  pickMode = null;
+  if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+  if (originMarker) { map.removeLayer(originMarker); originMarker = null; }
+  if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
+  originLatLng = null;
+  destLatLng = null;
+  $("routeStatus").className = "status";
+  $("routeStatus").textContent = "Marque origem e destino no mapa.";
+};
+
+async function calcRoute() {
+  if (!originLatLng || !destLatLng) {
+    $("routeStatus").className = "status err";
+    $("routeStatus").textContent = "Marque a origem e o destino primeiro.";
+    return;
+  }
+
+  $("routeStatus").className = "status wait";
+  $("routeStatus").textContent = "Calculando rota...";
+
+  try {
+    const [oLat, oLng] = originLatLng;
+    const [dLat, dLng] = destLatLng;
+    const url = `https://router.project-osrm.org/route/v1/driving/${oLng},${oLat};${dLng},${dLat}?overview=full&geometries=geojson`;
+
+    const r = await fetch(url);
+    const data = await r.json();
+
+    if (data.code !== "Ok" || !data.routes?.length) {
+      throw new Error("Rota não encontrada entre os pontos");
+    }
+
+    const route = data.routes[0];
+
+    if (routeLine) map.removeLayer(routeLine);
+    routeLine = L.geoJSON(route.geometry, {
+      style: { color: "#38bdf8", weight: 5, opacity: 0.85 },
+    }).addTo(map);
+
+    map.fitBounds(routeLine.getBounds(), { padding: [30, 30] });
+
+    const km = (route.distance / 1000).toFixed(1);
+    const min = Math.round(route.duration / 60);
+
+    $("routeStatus").className = "status ok";
+    $("routeStatus").textContent = `📏 ${km} km · ⏱ ~${min} min (rota livre de trânsito, OSRM grátis)`;
+  } catch (err) {
+    $("routeStatus").className = "status err";
+    $("routeStatus").textContent = err.message || "Erro ao calcular rota";
+  }
+}
+
+$("btnCalcRoute").onclick = calcRoute;
+
+// ----- Lista de motoristas online -----
+function focusDriver(id, lat, lng, accuracy) {
+  $("watchId").value = id;
+  if (!map) initMap();
+  updateMarker(lat, lng, accuracy);
+  map.setView([lat, lng], 15, { animate: true });
+}
+window.focusDriver = focusDriver;
+
+async function loadDriversList() {
+  try {
+    const r = await fetch("/api/locations", { cache: "no-store" });
+    const d = await r.json();
+    if (!d.ok) return;
+
+    if (!d.locations.length) {
+      $("driversList").innerHTML = "Nenhum motorista online no momento.";
+      return;
+    }
+
+    $("driversList").innerHTML = d.locations
+      .map(
+        (loc) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #334155">
+        <div>
+          <strong style="color:#f8fafc">${loc.driverId}</strong><br>
+          <span class="hint">há ${loc.ageSeconds}s · ~${Math.round(loc.accuracy || 0)} m</span>
+        </div>
+        <button class="secondary" style="width:auto;padding:6px 10px" onclick="focusDriver('${loc.driverId}', ${loc.lat}, ${loc.lng}, ${loc.accuracy || 30})">Ver no mapa</button>
+      </div>`
+      )
+      .join("");
+  } catch {
+    $("driversList").innerHTML = "Erro ao carregar lista de motoristas.";
+  }
+}
+
 checkBackend();
 setInterval(checkBackend, 15000);
+loadDriversList();
+setInterval(loadDriversList, 5000);
 </script>
 </body>
 </html>
