@@ -99,16 +99,23 @@ pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#94a3b8;
 
     <div class="card">
       <h2>🧭 Calcular rota (grátis · OSRM)</h2>
-      <div class="row">
-        <button id="btnPickOrigin" class="secondary">📍 Marcar origem</button>
-        <button id="btnPickDest" class="secondary">🏁 Marcar destino</button>
+
+      <label>Origem (endereço, bairro, rua...)</label>
+      <input id="originText" placeholder="Ex: Rua Q, Setor Bueno, Goiânia" autocomplete="off">
+      <label>Destino (endereço, bairro, rua...)</label>
+      <input id="destText" placeholder="Ex: Lote 12, Jardim América, Goiânia" autocomplete="off">
+      <button id="btnSearchAddresses" class="secondary" style="margin-top:8px">🔎 Buscar endereços</button>
+      <p class="hint">Dica: quanto mais completo (rua + bairro + cidade), melhor a precisão. A busca usa o geocodificador gratuito OpenStreetMap (Nominatim).</p>
+
+      <div class="row" style="margin-top:12px">
+        <button id="btnPickOrigin" class="secondary">📍 Marcar origem no mapa</button>
+        <button id="btnPickDest" class="secondary">🏁 Marcar destino no mapa</button>
       </div>
       <div class="row" style="margin-top:8px">
         <button id="btnCalcRoute">Calcular rota</button>
         <button id="btnClearRoute" class="secondary">✕ Limpar</button>
       </div>
-      <div id="routeStatus" class="status">Marque origem e destino no mapa.</div>
-      <p class="hint">Clique nos botões acima e depois clique no mapa para marcar cada ponto. O cálculo usa o servidor público do OSRM (grátis, sem chave de API) — ideal para testes.</p>
+      <div id="routeStatus" class="status">Marque origem e destino no mapa ou busque por nome.</div>
     </div>
 
     <div class="card">
@@ -458,6 +465,94 @@ function onMapClickForRoute(e) {
   $("routeStatus").className = "status ok";
   $("routeStatus").textContent = "Ponto marcado. Marque o outro ponto ou clique em Calcular rota.";
 }
+
+// ----- Buscar endereço por nome (Nominatim/OpenStreetMap, grátis) -----
+async function geocodeAddress(text) {
+  const query = text.trim();
+  if (!query) return null;
+
+  // viewbox = área de Goiás, prioriza resultados dentro do estado
+  const viewbox = "-53.4,-12.3,-45.8,-19.6";
+  const url =
+    `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=0` +
+    `&viewbox=${viewbox}&bounded=0` +
+    `&countrycodes=br&q=${encodeURIComponent(query + ", Goiás, Brasil")}`;
+
+  const r = await fetch(url, {
+    headers: { Accept: "application/json" },
+  });
+  const results = await r.json();
+  if (!results.length) return null;
+
+  return {
+    lat: Number(results[0].lat),
+    lng: Number(results[0].lon),
+    label: results[0].display_name,
+  };
+}
+
+$("btnSearchAddresses").onclick = async () => {
+  const originText = $("originText").value.trim();
+  const destText = $("destText").value.trim();
+
+  if (!originText && !destText) {
+    $("routeStatus").className = "status err";
+    $("routeStatus").textContent = "Digite ao menos um endereço (origem ou destino).";
+    return;
+  }
+
+  if (!map) initMap();
+  $("routeStatus").className = "status wait";
+  $("routeStatus").textContent = "Buscando endereços...";
+
+  try {
+    if (originText) {
+      const found = await geocodeAddress(originText);
+      if (!found) throw new Error(`Origem não encontrada: "${originText}"`);
+      originLatLng = [found.lat, found.lng];
+      if (originMarker) {
+        originMarker.setLatLng(originLatLng);
+      } else {
+        originMarker = L.marker(originLatLng, {
+          title: "Origem",
+          icon: L.divIcon({ className: "", html: "🟢", iconSize: [24, 24] }),
+        }).addTo(map).bindPopup("Origem: " + found.label);
+      }
+    }
+
+    if (destText) {
+      const found = await geocodeAddress(destText);
+      if (!found) throw new Error(`Destino não encontrado: "${destText}"`);
+      destLatLng = [found.lat, found.lng];
+      if (destMarker) {
+        destMarker.setLatLng(destLatLng);
+      } else {
+        destMarker = L.marker(destLatLng, {
+          title: "Destino",
+          icon: L.divIcon({ className: "", html: "🏁", iconSize: [24, 24] }),
+        }).addTo(map).bindPopup("Destino: " + found.label);
+      }
+    }
+
+    const bounds = [];
+    if (originLatLng) bounds.push(originLatLng);
+    if (destLatLng) bounds.push(destLatLng);
+    if (bounds.length === 2) {
+      map.fitBounds(bounds, { padding: [50, 50] });
+    } else if (bounds.length === 1) {
+      map.setView(bounds[0], 15);
+    }
+
+    $("routeStatus").className = "status ok";
+    $("routeStatus").textContent =
+      originLatLng && destLatLng
+        ? "Endereços encontrados. Clique em Calcular rota."
+        : "Endereço encontrado. Informe o outro ponto (busca ou clique no mapa).";
+  } catch (err) {
+    $("routeStatus").className = "status err";
+    $("routeStatus").textContent = err.message || "Erro ao buscar endereço";
+  }
+};
 
 $("btnPickOrigin").onclick = () => {
   if (!map) initMap();
