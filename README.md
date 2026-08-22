@@ -85,3 +85,12 @@ Este é um laboratório de arquitetura, não produção. Para produção:
 - painel de despacho;
 - múltiplas cidades/áreas;
 - cálculo de rota apenas quando necessário.
+
+
+## Link do Google Maps
+
+O painel do motorista agora aceita um link como `https://maps.app.goo.gl/...`.
+
+O backend recebe em `POST /api/drivers/:id/location-link` e registra o link temporariamente.
+
+**Importante:** o Google documenta que o link permite que outras pessoas vejam a localização compartilhada por até 24 horas, mas o link não equivale a uma API de GPS que entregue continuamente latitude/longitude ao nosso backend. Para o matching automático, a fonte ideal é o GPS do próprio PWA/app ou uma integração oficialmente suportada.

@@ -21,7 +21,11 @@
         <p>ID: <strong id="driverId"></strong></p>
         <p>Status: <strong id="driverStatus">OFFLINE</strong></p>
         <button id="startShift">🟢 Iniciar expediente</button>
-        <button id="sendLocation">📍 Atualizar localização</button>
+        <button id="sendLocation">📍 Atualizar localização pelo GPS</button>
+        <label for="mapsLink">Ou cole o link de localização do Google Maps:</label>
+        <input id="mapsLink" placeholder="https://maps.app.goo.gl/..." inputmode="url">
+        <button id="sendMapsLink">🔗 Enviar link do Maps</button>
+        <small class="muted">O MVP registra o link como referência. Ele não é um feed de GPS para o backend.</small>
         <button id="stopShift">🔴 Encerrar expediente</button>
         <div id="offer" class="offer" hidden></div>
       </div>

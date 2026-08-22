@@ -101,6 +101,21 @@ $("startShift").onclick = async () => {
   refresh();
 };
 
+$("sendMapsLink").onclick = async () => {
+  const link = $("mapsLink").value.trim();
+  if (!link) return alert("Cole o link do Google Maps.");
+  try {
+    driver = await api(`/api/drivers/${driver.id}/location-link`, {
+      method: "POST",
+      body: JSON.stringify({ link })
+    });
+    alert("Link recebido pelo backend.");
+    refresh();
+  } catch (e) {
+    alert("Maps: " + e.message);
+  }
+};
+
 $("sendLocation").onclick = async () => {
   try {
     const position = await gps();

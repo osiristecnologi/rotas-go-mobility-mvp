@@ -46,7 +46,8 @@ function publicDriver(d) {
     accuracy: d.accuracy,
     locationSource: d.locationSource,
     locationUpdatedAt: d.locationUpdatedAt,
-    locationExpiresAt: d.locationExpiresAt
+    locationExpiresAt: d.locationExpiresAt,
+    locationLink: d.locationLink || null
   };
 }
 
@@ -170,6 +171,29 @@ app.post("/api/drivers/:driverId/shift/start", (req, res) => {
 
   broadcast("DRIVER_UPDATED", publicDriver(d));
   res.json(publicDriver(d));
+});
+
+app.post("/api/drivers/:driverId/location-link", (req, res) => {
+  const d = drivers.get(req.params.driverId);
+  if (!d) return res.status(404).json({ error: "driver_not_found" });
+
+  const link = String(req.body.link || "").trim();
+  if (!/^https:\/\/maps\.app\.goo\.gl\//i.test(link) &&
+      !/^https:\/\/www\.google\.com\/maps/i.test(link) &&
+      !/^https:\/\/maps\.google\.com\//i.test(link)) {
+    return res.status(400).json({ error: "invalid_google_maps_link" });
+  }
+
+  d.locationLink = link;
+  d.locationSource = "GOOGLE_MAPS_LINK";
+  d.locationUpdatedAt = now();
+  d.locationExpiresAt = now() + LOCATION_TTL_MS;
+
+  broadcast("DRIVER_UPDATED", publicDriver(d));
+  res.json({
+    ...publicDriver(d),
+    note: "Link recebido. O link do Maps é uma referência; para coordenadas automáticas, use GPS do app/PWA ou integração oficialmente suportada."
+  });
 });
 
 app.post("/api/drivers/:driverId/location", (req, res) => {
