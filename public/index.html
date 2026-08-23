@@ -341,7 +341,20 @@ function autoUserOrigin(force) {
       $("originText").value = `Minha localização (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
       mapUser.setView([lat, lng], 15);
       $("routeStatus").className = "status ok";
-      $("routeStatus").textContent = "Embarque definido. Informe só o destino.";
+      $("routeStatus").textContent = "Embarque definido. Buscando endereço...";
+      // converte lat/lng em endereço legível
+      try {
+        const gr = await fetch(`/api/geocode/reverse?lat=${lat}&lng=${lng}`);
+        const gd = await gr.json();
+        if (gd.ok && gd.label) {
+          $("originText").value = gd.label;
+          $("routeStatus").textContent = "Embarque: " + gd.label + " · Informe o destino.";
+        } else {
+          $("routeStatus").textContent = "Embarque definido. Informe só o destino.";
+        }
+      } catch {
+        $("routeStatus").textContent = "Embarque definido. Informe só o destino.";
+      }
     } catch (err) {
       $("routeStatus").className = "status err";
       $("routeStatus").textContent =
