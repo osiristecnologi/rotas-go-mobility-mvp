@@ -1,6 +1,6 @@
 {
-  "name": "rotas-go-location-live",
-  "version": "5.1.0",
+  "name": "rotas-go-rides",
+  "version": "6.0.0",
   "private": true,
   "type": "module",
   "scripts": {
