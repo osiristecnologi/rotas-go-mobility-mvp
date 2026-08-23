@@ -43,6 +43,11 @@ const locations = new Map();
 const rides = new Map();
 const driverSockets = new Map();
 const clientSockets = new Map();
+// clientId -> { cancelCount, pendingFee }
+const clientStats = new Map();
+const FREE_CANCEL_LIMIT = 2;
+const CANCEL_FEE = 5.0;
+
 
 function json(res, status, payload) {
   return res.status(status).type("application/json").send(JSON.stringify(payload));
@@ -115,7 +120,7 @@ app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     service: "rotas-go-rides",
-    version: "6.1",
+    version: "6.2",
     uptimeSeconds: Math.round(process.uptime()),
     activeDrivers: locations.size,
     profiles: profiles.size,
@@ -296,6 +301,18 @@ function offerNextDriver(ride) {
   }, timeout);
 }
 
+app.get("/api/client/:clientId/stats", (req, res) => {
+  const stats = clientStats.get(req.params.clientId) || { cancelCount: 0, pendingFee: 0 };
+  return json(res, 200, {
+    ok: true,
+    cancelCount: stats.cancelCount,
+    freeLeft: Math.max(0, FREE_CANCEL_LIMIT - stats.cancelCount),
+    pendingFee: stats.pendingFee,
+    freeCancelLimit: FREE_CANCEL_LIMIT,
+    cancelFee: CANCEL_FEE,
+  });
+});
+
 app.post("/api/ride/request", (req, res) => {
   const clientId = String(req.body?.clientId || "").trim();
   const passengerName = String(req.body?.passengerName || "Passageiro").trim();
@@ -321,6 +338,18 @@ app.post("/api/ride/request", (req, res) => {
   let pricing = pricingIn;
   if (!pricing || !Number.isFinite(Number(pricing.total))) {
     pricing = calcPrice(haversineKm(o, d) * 1.3);
+  }
+  // aplica taxa de cancelamento pendente na próxima corrida
+  const stats = clientStats.get(clientId) || { cancelCount: 0, pendingFee: 0 };
+  const cancelFeeApplied = Number(stats.pendingFee || 0);
+  if (cancelFeeApplied > 0) {
+    pricing = {
+      ...pricing,
+      cancelFee: cancelFeeApplied,
+      total: Number((Number(pricing.total) + cancelFeeApplied).toFixed(2)),
+    };
+    stats.pendingFee = 0;
+    clientStats.set(clientId, stats);
   }
   const rideId = randomUUID();
   const ride = {
@@ -357,6 +386,78 @@ app.get("/api/ride/:rideId", (req, res) => {
     pricing: ride.pricing,
     attempts: ride.attempts,
     updatedAt: ride.updatedAt,
+  });
+});
+
+
+app.post("/api/ride/:rideId/cancel", (req, res) => {
+  const ride = rides.get(req.params.rideId);
+  if (!ride) return json(res, 404, { ok: false, error: "corrida_nao_encontrada" });
+  if (!["searching", "offered", "accepted"].includes(ride.status)) {
+    return json(res, 400, { ok: false, error: "corrida_nao_pode_cancelar" });
+  }
+
+  if (ride.timer) clearTimeout(ride.timer);
+
+  // libera motorista se estava assigned/offered
+  if (ride.assignedDriverId) {
+    const loc = locations.get(ride.assignedDriverId);
+    if (loc) loc.status = "available";
+  }
+  if (ride.offeredTo) {
+    const loc = locations.get(ride.offeredTo);
+    if (loc && loc.status === "busy") loc.status = "available";
+  }
+
+  ride.status = "cancelled";
+  ride.updatedAt = Date.now();
+
+  const stats = clientStats.get(ride.clientId) || { cancelCount: 0, pendingFee: 0 };
+  stats.cancelCount += 1;
+  let feeCharged = 0;
+  if (stats.cancelCount > FREE_CANCEL_LIMIT) {
+    feeCharged = CANCEL_FEE;
+    stats.pendingFee = Number((stats.pendingFee + CANCEL_FEE).toFixed(2));
+  }
+  clientStats.set(ride.clientId, stats);
+
+  // avisa motorista se estava com oferta/aceite
+  if (ride.offeredTo) {
+    sendTo(driverSockets, ride.offeredTo, {
+      type: "ride_cancelled",
+      rideId: ride.rideId,
+      message: "Passageiro cancelou a corrida.",
+    });
+  }
+  if (ride.assignedDriverId && ride.assignedDriverId !== ride.offeredTo) {
+    sendTo(driverSockets, ride.assignedDriverId, {
+      type: "ride_cancelled",
+      rideId: ride.rideId,
+      message: "Passageiro cancelou a corrida.",
+    });
+  }
+
+  notifyClient(ride, {
+    type: "ride_cancelled",
+    rideId: ride.rideId,
+    cancelCount: stats.cancelCount,
+    freeLeft: Math.max(0, FREE_CANCEL_LIMIT - stats.cancelCount),
+    feeCharged,
+    pendingFee: stats.pendingFee,
+    message:
+      feeCharged > 0
+        ? `Cancelada. Taxa de R$ ${feeCharged.toFixed(2)} será cobrada na próxima corrida.`
+        : `Cancelada. Cancelamentos grátis restantes: ${Math.max(0, FREE_CANCEL_LIMIT - stats.cancelCount)}.`,
+  });
+
+  return json(res, 200, {
+    ok: true,
+    rideId: ride.rideId,
+    status: "cancelled",
+    cancelCount: stats.cancelCount,
+    freeLeft: Math.max(0, FREE_CANCEL_LIMIT - stats.cancelCount),
+    feeCharged,
+    pendingFee: stats.pendingFee,
   });
 });
 
@@ -433,5 +534,5 @@ wss.on("connection", (ws, req) => {
 setInterval(cleanExpired, 15000);
 
 server.listen(PORT, () => {
-  console.log(`[Rotas GO] V6.1 rides + photo upload on port ${PORT}`);
+  console.log(`[Rotas GO] V6.2 cancel fee + photo fix on port ${PORT}`);
 });
