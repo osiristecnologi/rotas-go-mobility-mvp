@@ -260,7 +260,7 @@ app.get("/health", async (_req, res) => {
   res.json({
     ok: true,
     service: "rotas-go-rides",
-    version: "7.1",
+    version: "7.2",
     db: dbOk,
     uptimeSeconds: Math.round(process.uptime()),
     activeDrivers,
@@ -763,20 +763,17 @@ app.post("/api/ride/:rideId/cancel", async (req, res) => {
         ? `Cancelada. Taxa de R$ ${feeCharged.toFixed(2)} será cobrada na próxima corrida.`
         : `Cancelada. Cancelamentos grátis restantes: ${Math.max(0, FREE_CANCEL_LIMIT - cancelCount)}.`;
 
-    if (ride.offered_to) {
-      sendTo(driverSockets, ride.offered_to, {
+    const notifyDrivers = new Set(
+      [ride.offered_to, ride.assigned_driver_id].filter(Boolean)
+    );
+    for (const drv of notifyDrivers) {
+      sendTo(driverSockets, drv, {
         type: "ride_cancelled",
         rideId: ride.ride_id,
         message: "Passageiro cancelou a corrida.",
       });
     }
-    if (ride.assigned_driver_id && ride.assigned_driver_id !== ride.offered_to) {
-      sendTo(driverSockets, ride.assigned_driver_id, {
-        type: "ride_cancelled",
-        rideId: ride.ride_id,
-        message: "Passageiro cancelou a corrida.",
-      });
-    }
+    console.log("[CANCEL]", ride.ride_id, "by", ride.client_id, "drivers notified:", [...notifyDrivers]);
 
     notifyClient(ride.client_id, {
       type: "ride_cancelled",
@@ -940,7 +937,7 @@ setInterval(() => {
 initDb()
   .then(() => {
     server.listen(PORT, () => {
-      console.log(`[Rotas GO] V7.1 auto-origin + ride/delivery pricing on port ${PORT}`);
+      console.log(`[Rotas GO] V7.2 cancel fix + geo on port ${PORT}`);
     });
   })
   .catch((err) => {
