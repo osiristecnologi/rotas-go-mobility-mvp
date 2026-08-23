@@ -1,6 +1,6 @@
 {
-  "name": "rotas-go-location-resolver-v4",
-  "version": "0.5.0",
+  "name": "rotas-go-location-live",
+  "version": "5.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,6 @@
   },
   "dependencies": {
     "express": "^5.1.0",
-    "playwright": "^1.55.0",
     "ws": "^8.18.0"
   }
 }
