@@ -45,7 +45,7 @@ button:disabled{opacity:.5}
 <body>
 <header>
   <div>
-    <h1>🚕 Rotas GO</h1>
+    <h1>🦈 Rotas GO</h1>
     <div class="sub">Corridas · Goiás · teste</div>
   </div>
   <div>
@@ -129,8 +129,16 @@ button:disabled{opacity:.5}
       <input id="drvModel" value="Onix 2022" autocomplete="off">
       <label>Cor</label>
       <input id="drvColor" value="Prata" autocomplete="off">
-      <label>URL da foto (opcional)</label>
-      <input id="drvPhotoUrl" placeholder="https://..." autocomplete="off">
+      <label>Foto do motorista</label>
+      <input id="drvPhotoFile" type="file" accept="image/*" capture="user" style="padding:8px">
+      <div class="row" style="margin-top:6px">
+        <button id="btnUploadPhoto" class="secondary" type="button">📷 Enviar foto</button>
+      </div>
+      <div id="photoPreviewWrap" class="hide" style="margin-top:8px;text-align:center">
+        <img id="photoPreview" alt="preview" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid #475569">
+      </div>
+      <label>URL da foto (preenchida após enviar)</label>
+      <input id="drvPhotoUrl" placeholder="Envie a foto acima" autocomplete="off" readonly>
       <button id="btnSaveProfile" class="secondary" style="margin-top:10px">💾 Salvar perfil</button>
       <div id="profileStatus" class="hint"></div>
     </div>
@@ -330,15 +338,20 @@ async function loadDrivers() {
       $("driversList").textContent = "Nenhum motorista online.";
       return;
     }
-    $("driversList").innerHTML = d.locations.map((loc) => `
+    $("driversList").innerHTML = d.locations.map((loc) => {
+      const photo = loc.photoUrl
+        ? (loc.photoUrl.startsWith("http") ? loc.photoUrl : location.origin + loc.photoUrl)
+        : "https://via.placeholder.com/48?text=🚗";
+      return `
       <div class="driverCard">
-        <img src="${loc.photoUrl || "https://via.placeholder.com/48?text=🚗"}" alt="">
+        <img src="${photo}" alt="">
         <div>
           <strong>${loc.name || loc.driverId}</strong>
           <div class="meta">${[loc.model, loc.color].filter(Boolean).join(" · ") || "—"} · ${loc.plate || "s/ placa"}</div>
           <div class="meta">há ${loc.ageSeconds ?? "?"}s · ${loc.status || "available"}</div>
         </div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
   } catch {
     $("driversList").textContent = "Erro ao carregar.";
   }
@@ -364,7 +377,9 @@ function ensureClientWs() {
       $("drvName").textContent = d.name || msg.driverId;
       $("drvCar").textContent = [d.model, d.color].filter(Boolean).join(" · ") || "—";
       $("drvPlate").textContent = d.plate ? `Placa ${d.plate}` : "";
-      $("drvPhoto").src = d.photoUrl || "https://via.placeholder.com/48?text=🚗";
+      $("drvPhoto").src = d.photoUrl
+        ? (d.photoUrl.startsWith("http") ? d.photoUrl : location.origin + d.photoUrl)
+        : "https://via.placeholder.com/48?text=🚗";
     } else if (msg.type === "ride_no_driver") {
       $("rideStatus").className = "status err";
       $("rideStatus").textContent = msg.message;
@@ -410,6 +425,35 @@ $("btnRequest").onclick = async () => {
   } catch (e) {
     $("rideStatus").className = "status err";
     $("rideStatus").textContent = e.message;
+  }
+};
+
+// ----- Motorista: upload foto -----
+$("btnUploadPhoto").onclick = async () => {
+  const fileInput = $("drvPhotoFile");
+  if (!fileInput.files || !fileInput.files[0]) {
+    $("profileStatus").textContent = "Escolha uma foto primeiro.";
+    return;
+  }
+  const file = fileInput.files[0];
+  if (file.size > 3 * 1024 * 1024) {
+    $("profileStatus").textContent = "Foto muito grande (máx. 3 MB).";
+    return;
+  }
+  $("profileStatus").textContent = "Enviando foto...";
+  try {
+    const fd = new FormData();
+    fd.append("photo", file);
+    const res = await fetch("/api/upload/photo", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "falha no upload");
+    const fullUrl = data.photoUrl.startsWith("http") ? data.photoUrl : (location.origin + data.photoUrl);
+    $("drvPhotoUrl").value = data.photoUrl;
+    $("photoPreview").src = fullUrl;
+    $("photoPreviewWrap").classList.remove("hide");
+    $("profileStatus").textContent = "Foto enviada. Agora clique em Salvar perfil.";
+  } catch (e) {
+    $("profileStatus").textContent = e.message || "Erro no upload";
   }
 };
 
