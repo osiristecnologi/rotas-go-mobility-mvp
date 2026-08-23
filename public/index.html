@@ -16,7 +16,7 @@ main{max-width:520px;margin:0 auto;padding:10px 10px 40px}
 .card{background:#1e293b;border-radius:14px;padding:14px;margin-bottom:10px;border:1px solid #334155}
 h2{margin:0 0 10px;font-size:15px}
 label{display:block;font-weight:700;font-size:12px;margin-top:8px;color:#94a3b8}
-input,button,select{width:100%;font:inherit;padding:11px;border-radius:10px;margin-top:5px;border:0}
+input,button{width:100%;font:inherit;padding:11px;border-radius:10px;margin-top:5px;border:0}
 input{background:#0f172a;color:#e2e8f0;border:1px solid #475569}
 button{background:#f97316;color:#fff;font-weight:800;cursor:pointer}
 button.secondary{background:#475569}
@@ -46,7 +46,7 @@ button:disabled{opacity:.5}
 <header>
   <div>
     <h1> Rotas GO</h1>
-    <div class="sub">Corridas · Goiás · teste</div>
+    <div class="sub">Corridas · Entregas · Goiás</div>
   </div>
   <div>
     <span id="backendBadge" class="badge">…</span>
@@ -60,7 +60,7 @@ button:disabled{opacity:.5}
     <button id="tabDriver">🚕 Motorista</button>
   </div>
 
-  <!-- ========== USUÁRIO ========== -->
+  <!-- USUÁRIO -->
   <section id="panelUser">
     <div class="card">
       <h2>Seus dados</h2>
@@ -71,27 +71,28 @@ button:disabled{opacity:.5}
     <div class="card">
       <h2>Tipo de serviço</h2>
       <div class="row">
-        <button type="button" id="svcRide" class="active" style="background:#f97316">🚕 Motorista</button>
+        <button type="button" id="svcRide">🚕 Motorista</button>
         <button type="button" id="svcDelivery" class="secondary">📦 Entrega</button>
       </div>
-      <p class="hint" id="svcHint">Motorista: R$ 2,00/km + taxa R$ 0,80 · Entrega: R$ 1,20/km + taxa R$ 0,60</p>
+      <p class="hint" id="svcHint">Motorista: R$ 2,00/km + taxa R$ 0,80</p>
     </div>
 
     <div class="card">
       <h2>Embarque e destino</h2>
-      <label>Origem (sua localização)</label>
-      <input id="originText" placeholder="Detectando sua localização..." autocomplete="off">
+      <label>Origem</label>
+      <input id="originText" placeholder="Detectando localização..." autocomplete="off">
+      <button id="btnMyLocation" class="secondary" type="button">📍 Usar minha localização</button>
       <label>Destino</label>
       <input id="destText" placeholder="Ex: Centro, Anápolis" autocomplete="off">
       <div class="row" style="margin-top:8px">
-        <button id="btnSearch" class="secondary">🔎 Buscar no mapa</button>
+        <button id="btnSearch" class="secondary">🔎 Buscar destino</button>
         <button id="btnEstimate">💰 Ver valor</button>
       </div>
       <div class="row" style="margin-top:8px">
         <button id="btnPickO" class="secondary">📍 Origem no mapa</button>
         <button id="btnPickD" class="secondary">🏁 Destino no mapa</button>
       </div>
-      <div id="routeStatus" class="status">Informe origem e destino.</div>
+      <div id="routeStatus" class="status">Permita a localização ou marque a origem.</div>
       <div id="priceBox" class="hide">
         <div class="price" id="priceTotal">R$ —</div>
         <div class="hint" id="priceDetail"></div>
@@ -109,10 +110,10 @@ button:disabled{opacity:.5}
 
     <div class="card">
       <div class="row">
-        <button id="btnRequest">🚕 Solicitar corrida</button>
+        <button id="btnRequest">🚕 Solicitar</button>
         <button id="btnCancelRide" class="danger hide">✕ Cancelar</button>
       </div>
-      <div id="rideStatus" class="status">Preencha origem/destino e veja o valor.</div>
+      <div id="rideStatus" class="status">Informe destino e veja o valor.</div>
       <div id="cancelInfo" class="hint"></div>
       <div id="assignedBox" class="hide" style="margin-top:12px">
         <h2>Seu motorista</h2>
@@ -128,7 +129,7 @@ button:disabled{opacity:.5}
     </div>
   </section>
 
-  <!-- ========== MOTORISTA ========== -->
+  <!-- MOTORISTA -->
   <section id="panelDriver" class="hide">
     <div class="card">
       <h2>Cadastro do motorista</h2>
@@ -138,20 +139,17 @@ button:disabled{opacity:.5}
       <input id="drvRegName" value="Carlos Silva" autocomplete="name">
       <label>Placa</label>
       <input id="drvPlateIn" value="ABC1D23" autocomplete="off">
-      <label>Modelo do carro</label>
+      <label>Modelo</label>
       <input id="drvModel" value="Onix 2022" autocomplete="off">
       <label>Cor</label>
       <input id="drvColor" value="Prata" autocomplete="off">
-      <label>Foto do motorista</label>
+      <label>Foto</label>
       <input id="drvPhotoFile" type="file" accept="image/*" capture="user" style="padding:8px">
-      <div class="row" style="margin-top:6px">
-        <button id="btnUploadPhoto" class="secondary" type="button">📷 Enviar foto</button>
-      </div>
+      <button id="btnUploadPhoto" class="secondary" type="button">📷 Enviar foto</button>
       <div id="photoPreviewWrap" class="hide" style="margin-top:8px;text-align:center">
-        <img id="photoPreview" alt="preview" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid #475569">
+        <img id="photoPreview" alt="" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid #475569">
       </div>
-      <label>URL da foto (preenchida após enviar)</label>
-      <input id="drvPhotoUrl" placeholder="Envie a foto acima" autocomplete="off" readonly>
+      <input id="drvPhotoUrl" type="hidden" value="">
       <button id="btnSaveProfile" class="secondary" style="margin-top:10px">💾 Salvar perfil</button>
       <div id="profileStatus" class="hint"></div>
     </div>
@@ -162,8 +160,7 @@ button:disabled{opacity:.5}
         <button id="btnGoOnline">▶ Ficar online</button>
         <button id="btnGoOffline" class="danger" disabled>■ Offline</button>
       </div>
-      <div id="driverStatus" class="status">Offline. Salve o perfil e fique online.</div>
-      <p class="hint">Mantenha a tela ligada. Em produção o ideal é app nativo para segundo plano.</p>
+      <div id="driverStatus" class="status">Offline.</div>
     </div>
 
     <div class="card" style="padding:8px">
@@ -185,7 +182,7 @@ button:disabled{opacity:.5}
 </main>
 
 <script>
-const $ = id => document.getElementById(id);
+const $ = (id) => document.getElementById(id);
 const GOIAS_BOUNDS = L.latLngBounds([-19.6, -53.4], [-12.3, -45.8]);
 const GOIAS_CENTER = [-16.0, -49.5];
 
@@ -193,15 +190,17 @@ let mapUser, mapDriver;
 let originMarker, destMarker, driverMarker, accuracyCircle;
 let trackingMarker = null, trackingCircle = null;
 let originLatLng = null, destLatLng = null;
-let pickMode = null;
-let routeLine = null;
+let pickMode = null, routeLine = null;
 let lastPricing = null;
 let serviceType = localStorage.getItem("rotasgo_service") || "ride";
-
 let sendWatchId = null, sendTimer = null, wakeLock = null;
-let driverWs = null, clientWs = null, clientId = null, currentRideId = null, currentOffer = null;
+let driverWs = null, clientWs = null;
+let clientId = localStorage.getItem("rotasgo_clientId") || null;
+let currentRideId = null, currentOffer = null;
+let rideActive = false;
+let requestCooldownUntil = 0;
 
-// ----- Tabs (persiste para não perder tela ao tirar foto) -----
+// ----- Tabs -----
 function showTab(tab) {
   localStorage.setItem("rotasgo_tab", tab);
   if (tab === "driver") {
@@ -221,89 +220,61 @@ function showTab(tab) {
 $("tabUser").onclick = () => showTab("user");
 $("tabDriver").onclick = () => showTab("driver");
 
-// ----- Tipo de serviço -----
+// ----- Serviço -----
 function setService(type) {
   serviceType = type;
   localStorage.setItem("rotasgo_service", type);
   lastPricing = null;
   $("priceBox").classList.add("hide");
   if (type === "ride") {
-    $("svcRide").classList.add("active");
     $("svcRide").style.background = "#f97316";
-    $("svcDelivery").classList.remove("active");
-    $("svcDelivery").style.background = "";
+    $("svcDelivery").style.background = "#475569";
     $("svcHint").textContent = "Motorista: R$ 2,00/km + taxa R$ 0,80 por corrida";
   } else {
-    $("svcDelivery").classList.add("active");
     $("svcDelivery").style.background = "#f97316";
-    $("svcRide").classList.remove("active");
-    $("svcRide").style.background = "";
+    $("svcRide").style.background = "#475569";
     $("svcHint").textContent = "Entrega: R$ 1,20/km + taxa R$ 0,60 por corrida";
   }
 }
 $("svcRide").onclick = () => setService("ride");
 $("svcDelivery").onclick = () => setService("delivery");
-setService(serviceType);
 
-// ----- Localização automática do usuário (embarque) -----
-function autoUserOrigin() {
-  if (!navigator.geolocation) {
-    $("originText").placeholder = "Informe a origem ou marque no mapa";
-    return;
-  }
-  $("originText").placeholder = "Detectando sua localização...";
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
-      setOrigin([lat, lng]);
-      $("originText").value = `Minha localização (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
-      $("routeStatus").className = "status ok";
-      $("routeStatus").textContent = "Embarque definido pela sua localização. Informe só o destino.";
-      if (mapUser) {
-        mapUser.setView([lat, lng], 15);
-      }
-    },
-    (err) => {
-      $("originText").placeholder = "Permita a localização ou marque no mapa";
-      $("routeStatus").className = "status wait";
-      $("routeStatus").textContent =
-        err.code === 1
-          ? "Permissão de localização negada. Marque a origem no mapa ou digite o endereço."
-          : "Não foi possível obter sua localização. Marque a origem no mapa.";
-    },
-    { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
-  );
-}
-
-
-
+// ----- Mapas -----
 function initMapUser() {
+  if (mapUser) return;
   mapUser = L.map("mapUser", { center: GOIAS_CENTER, zoom: 7, maxBounds: GOIAS_BOUNDS.pad(0.15), minZoom: 6 });
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(mapUser);
   mapUser.on("click", (e) => {
     if (!pickMode) return;
     const ll = [e.latlng.lat, e.latlng.lng];
-    if (pickMode === "origin") setOrigin(ll);
+    if (pickMode === "origin") setOrigin(ll, true);
     else setDest(ll);
     pickMode = null;
     $("routeStatus").className = "status ok";
-    $("routeStatus").textContent = "Ponto marcado.";
+    $("routeStatus").textContent = "Ponto marcado no mapa.";
   });
 }
 function initMapDriver() {
+  if (mapDriver) return;
   mapDriver = L.map("mapDriver", { center: GOIAS_CENTER, zoom: 7, maxBounds: GOIAS_BOUNDS.pad(0.15), minZoom: 6 });
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(mapDriver);
 }
 
-function setOrigin(ll) {
+function setOrigin(ll, fromMap) {
   originLatLng = ll;
   if (!mapUser) initMapUser();
   if (originMarker) originMarker.setLatLng(ll);
   else {
     originMarker = L.marker(ll, { draggable: true, icon: L.divIcon({ html: "🟢", iconSize: [24, 24], className: "" }) }).addTo(mapUser);
-    originMarker.on("dragend", () => { const p = originMarker.getLatLng(); originLatLng = [p.lat, p.lng]; lastPricing = null; });
+    originMarker.on("dragend", () => {
+      const p = originMarker.getLatLng();
+      originLatLng = [p.lat, p.lng];
+      $("originText").value = `Origem (${p.lat.toFixed(5)}, ${p.lng.toFixed(5)})`;
+      lastPricing = null;
+    });
   }
+  if (fromMap) $("originText").value = `Origem no mapa (${ll[0].toFixed(5)}, ${ll[1].toFixed(5)})`;
+  lastPricing = null;
 }
 function setDest(ll) {
   destLatLng = ll;
@@ -311,10 +282,80 @@ function setDest(ll) {
   if (destMarker) destMarker.setLatLng(ll);
   else {
     destMarker = L.marker(ll, { draggable: true, icon: L.divIcon({ html: "🏁", iconSize: [24, 24], className: "" }) }).addTo(mapUser);
-    destMarker.on("dragend", () => { const p = destMarker.getLatLng(); destLatLng = [p.lat, p.lng]; lastPricing = null; });
+    destMarker.on("dragend", () => {
+      const p = destMarker.getLatLng();
+      destLatLng = [p.lat, p.lng];
+      lastPricing = null;
+    });
   }
+  lastPricing = null;
 }
 
+function updateTrackingMarker(lat, lng, accuracy) {
+  if (!mapUser) initMapUser();
+  const ll = [lat, lng];
+  if (!trackingMarker) {
+    trackingMarker = L.marker(ll, { icon: L.divIcon({ html: "🚕", iconSize: [28, 28], className: "" }) }).addTo(mapUser);
+    trackingCircle = L.circle(ll, { radius: accuracy || 40, color: "#f97316", fillOpacity: 0.12 }).addTo(mapUser);
+  } else {
+    trackingMarker.setLatLng(ll);
+    if (trackingCircle) trackingCircle.setLatLng(ll).setRadius(accuracy || 40);
+  }
+  if (mapUser.getZoom() < 13) mapUser.setView(ll, 15, { animate: true });
+  else mapUser.panTo(ll, { animate: true });
+}
+
+function clearTracking() {
+  if (trackingMarker && mapUser) { mapUser.removeLayer(trackingMarker); trackingMarker = null; }
+  if (trackingCircle && mapUser) { mapUser.removeLayer(trackingCircle); trackingCircle = null; }
+}
+
+// ----- Geolocalização do usuário -----
+function autoUserOrigin(force) {
+  if (!navigator.geolocation) {
+    $("routeStatus").className = "status err";
+    $("routeStatus").textContent = "GPS não suportado. Marque a origem no mapa.";
+    return;
+  }
+  $("routeStatus").className = "status wait";
+  $("routeStatus").textContent = "Obtendo sua localização...";
+  $("btnMyLocation").disabled = true;
+
+  const tryPos = (options) =>
+    new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, options);
+    });
+
+  (async () => {
+    try {
+      let pos;
+      try {
+        pos = await tryPos({ enableHighAccuracy: true, timeout: 15000, maximumAge: force ? 0 : 15000 });
+      } catch {
+        pos = await tryPos({ enableHighAccuracy: false, timeout: 12000, maximumAge: 60000 });
+      }
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      if (!mapUser) initMapUser();
+      setOrigin([lat, lng]);
+      $("originText").value = `Minha localização (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+      mapUser.setView([lat, lng], 15);
+      $("routeStatus").className = "status ok";
+      $("routeStatus").textContent = "Embarque definido. Informe só o destino.";
+    } catch (err) {
+      $("routeStatus").className = "status err";
+      $("routeStatus").textContent =
+        err.code === 1
+          ? "Permissão negada. Ative a localização do navegador ou marque no mapa."
+          : "Não achei sua localização. Use o botão novamente ou marque no mapa.";
+    } finally {
+      $("btnMyLocation").disabled = false;
+    }
+  })();
+}
+$("btnMyLocation").onclick = () => autoUserOrigin(true);
+
+// ----- Geocode / rota -----
 async function geocode(text) {
   const q = text.trim() + ", Goiás, Brasil";
   const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&viewbox=-53.4,-12.3,-45.8,-19.6&bounded=1&q=${encodeURIComponent(q)}`;
@@ -324,35 +365,41 @@ async function geocode(text) {
   return { lat: Number(arr[0].lat), lng: Number(arr[0].lon), label: arr[0].display_name };
 }
 
-$("btnPickO").onclick = () => { if (!mapUser) initMapUser(); pickMode = "origin"; $("routeStatus").className = "status wait"; $("routeStatus").textContent = "Clique no mapa: ORIGEM"; };
-$("btnPickD").onclick = () => { if (!mapUser) initMapUser(); pickMode = "destino"; $("routeStatus").className = "status wait"; $("routeStatus").textContent = "Clique no mapa: DESTINO"; };
+$("btnPickO").onclick = () => {
+  if (!mapUser) initMapUser();
+  pickMode = "origin";
+  $("routeStatus").className = "status wait";
+  $("routeStatus").textContent = "Clique no mapa: ORIGEM";
+};
+$("btnPickD").onclick = () => {
+  if (!mapUser) initMapUser();
+  pickMode = "destino";
+  $("routeStatus").className = "status wait";
+  $("routeStatus").textContent = "Clique no mapa: DESTINO";
+};
 
 $("btnSearch").onclick = async () => {
-  const o = $("originText").value.trim();
   const d = $("destText").value.trim();
-  if (!o && !d) { $("routeStatus").className = "status err"; $("routeStatus").textContent = "Digite origem ou destino"; return; }
+  if (!d) {
+    $("routeStatus").className = "status err";
+    $("routeStatus").textContent = "Digite o destino";
+    return;
+  }
   if (!mapUser) initMapUser();
   $("routeStatus").className = "status wait";
-  $("routeStatus").textContent = "Buscando...";
+  $("routeStatus").textContent = "Buscando destino...";
   try {
-    if (o) {
-      const f = await geocode(o);
-      if (!f) throw new Error("Origem não encontrada");
-      setOrigin([f.lat, f.lng]);
-    }
-    if (d) {
-      const f = await geocode(d);
-      if (!f) throw new Error("Destino não encontrado");
-      setDest([f.lat, f.lng]);
-    }
+    if (!originLatLng) autoUserOrigin(true);
+    const f = await geocode(d);
+    if (!f) throw new Error("Destino não encontrado");
+    setDest([f.lat, f.lng]);
+    destMarker && destMarker.bindPopup(f.label);
     const b = [];
     if (originLatLng) b.push(originLatLng);
-    if (destLatLng) b.push(destLatLng);
-    if (b.length === 2) mapUser.fitBounds(b, { padding: [40, 40] });
-    else if (b.length === 1) mapUser.setView(b[0], 15);
+    b.push([f.lat, f.lng]);
+    mapUser.fitBounds(b, { padding: [40, 40] });
     $("routeStatus").className = "status ok";
-    $("routeStatus").textContent = "Endereços marcados. Clique em Ver valor.";
-    lastPricing = null;
+    $("routeStatus").textContent = "Destino encontrado. Clique em Ver valor.";
   } catch (e) {
     $("routeStatus").className = "status err";
     $("routeStatus").textContent = e.message;
@@ -362,7 +409,7 @@ $("btnSearch").onclick = async () => {
 $("btnEstimate").onclick = async () => {
   if (!originLatLng || !destLatLng) {
     $("routeStatus").className = "status err";
-    $("routeStatus").textContent = "Marque origem e destino primeiro";
+    $("routeStatus").textContent = "Defina origem e destino";
     return;
   }
   $("routeStatus").className = "status wait";
@@ -382,11 +429,9 @@ $("btnEstimate").onclick = async () => {
     lastPricing = data;
     $("priceBox").classList.remove("hide");
     $("priceTotal").textContent = `R$ ${data.total.toFixed(2).replace(".", ",")}`;
-    $("priceDetail").textContent = `${data.serviceLabel || (serviceType === "delivery" ? "Entrega" : "Motorista")} · ${data.distanceKm} km × R$ ${data.pricePerKm.toFixed(2)} + taxa R$ ${data.appFee.toFixed(2)}`;
+    $("priceDetail").textContent = `${data.serviceLabel || ""} · ${data.distanceKm} km × R$ ${data.pricePerKm.toFixed(2)} + taxa R$ ${data.appFee.toFixed(2)}`;
     $("routeStatus").className = "status ok";
     $("routeStatus").textContent = `Rota ~${data.distanceKm} km`;
-
-    // desenha rota
     try {
       const [oLat, oLng] = originLatLng;
       const [dLat, dLng] = destLatLng;
@@ -405,7 +450,20 @@ $("btnEstimate").onclick = async () => {
   }
 };
 
-// ----- Lista motoristas -----
+// ----- Backend helpers -----
+async function checkBackend() {
+  try {
+    const r = await fetch("/health", { cache: "no-store" });
+    const d = await r.json();
+    if (d.ok) {
+      $("backendBadge").textContent = `V${d.version}${d.db ? "+DB" : ""}`;
+      $("activeBadge").textContent = `${d.activeDrivers} online`;
+    }
+  } catch {
+    $("backendBadge").textContent = "offline";
+  }
+}
+
 async function loadDrivers() {
   try {
     const r = await fetch("/api/locations", { cache: "no-store" });
@@ -420,8 +478,7 @@ async function loadDrivers() {
       const photo = loc.photoUrl
         ? (loc.photoUrl.startsWith("http") ? loc.photoUrl : location.origin + loc.photoUrl)
         : "https://via.placeholder.com/48?text=🚗";
-      return `
-      <div class="driverCard">
+      return `<div class="driverCard">
         <img src="${photo}" alt="">
         <div>
           <strong>${loc.name || loc.driverId}</strong>
@@ -435,43 +492,60 @@ async function loadDrivers() {
   }
 }
 
-// ----- Solicitar corrida -----
+function setRequestEnabled(enabled) {
+  $("btnRequest").disabled = !enabled;
+  $("btnRequest").textContent = enabled ? "🚕 Solicitar" : "⏳ Indisponível";
+}
+function showCancel(show) {
+  if (show) $("btnCancelRide").classList.remove("hide");
+  else $("btnCancelRide").classList.add("hide");
+}
+function startCooldown(seconds) {
+  requestCooldownUntil = Date.now() + seconds * 1000;
+  setRequestEnabled(false);
+  let left = seconds;
+  $("btnRequest").textContent = `⏳ Aguarde ${left}s`;
+  const iv = setInterval(() => {
+    left -= 1;
+    if (left <= 0) {
+      clearInterval(iv);
+      setRequestEnabled(true);
+    } else {
+      $("btnRequest").textContent = `⏳ Aguarde ${left}s`;
+    }
+  }, 1000);
+}
 
-function updateTrackingMarker(lat, lng, accuracy) {
-  if (!mapUser) initMapUser();
-  const ll = [lat, lng];
-  if (!trackingMarker) {
-    trackingMarker = L.marker(ll, {
-      title: "Seu motorista",
-      icon: L.divIcon({ className: "", html: "🚕", iconSize: [28, 28] }),
-    }).addTo(mapUser).bindPopup("Seu motorista");
-    trackingCircle = L.circle(ll, {
-      radius: accuracy || 40,
-      color: "#f97316",
-      fillColor: "#f97316",
-      fillOpacity: 0.12,
-      weight: 1,
-    }).addTo(mapUser);
-  } else {
-    trackingMarker.setLatLng(ll);
-    if (trackingCircle) trackingCircle.setLatLng(ll).setRadius(accuracy || 40);
+async function refreshCancelInfo() {
+  if (!clientId) return;
+  try {
+    const r = await fetch(`/api/client/${encodeURIComponent(clientId)}/stats`);
+    const d = await r.json();
+    if (!d.ok) return;
+    let t = `Cancelamentos: ${d.cancelCount} · grátis restantes: ${d.freeLeft}`;
+    if (d.pendingFee > 0) t += ` · taxa pendente R$ ${Number(d.pendingFee).toFixed(2).replace(".", ",")}`;
+    $("cancelInfo").textContent = t;
+  } catch {}
+}
+
+function ensureClientId() {
+  if (!clientId) {
+    clientId = "CLI-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+    localStorage.setItem("rotasgo_clientId", clientId);
   }
-  const z = mapUser.getZoom();
-  if (z < 13) mapUser.setView(ll, 15, { animate: true });
-  else mapUser.panTo(ll, { animate: true });
+  return clientId;
 }
 
 function ensureClientWs() {
-  if (clientWs && clientWs.readyState === WebSocket.OPEN) return;
-  if (!clientId) {
-    clientId = localStorage.getItem("rotasgo_clientId") || ("CLI-" + Math.random().toString(36).slice(2, 8).toUpperCase());
-    localStorage.setItem("rotasgo_clientId", clientId);
-  }
+  ensureClientId();
+  if (clientWs && (clientWs.readyState === WebSocket.OPEN || clientWs.readyState === WebSocket.CONNECTING)) return;
   const proto = location.protocol === "https:" ? "wss" : "ws";
   clientWs = new WebSocket(`${proto}://${location.host}/ws?role=client&id=${encodeURIComponent(clientId)}`);
   clientWs.onmessage = (ev) => {
-    let msg; try { msg = JSON.parse(ev.data); } catch { return; }
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
     if (msg.rideId && currentRideId && msg.rideId !== currentRideId) return;
+
     if (msg.type === "ride_searching") {
       $("rideStatus").className = "status wait";
       $("rideStatus").textContent = msg.message;
@@ -490,12 +564,10 @@ function ensureClientWs() {
       $("drvPhoto").src = d.photoUrl
         ? (d.photoUrl.startsWith("http") ? d.photoUrl : location.origin + d.photoUrl)
         : "https://via.placeholder.com/48?text=🚗";
-      const trackMsg = (msg.tracking && msg.tracking.message) || "Motorista a caminho · calculando tempo...";
       $("rideStatus").className = "status ok";
-      $("rideStatus").textContent = trackMsg;
+      $("rideStatus").textContent = (msg.tracking && msg.tracking.message) || "Motorista a caminho...";
       if (d.lat != null && d.lng != null) updateTrackingMarker(d.lat, d.lng, d.accuracy);
     } else if (msg.type === "driver_position") {
-      if (msg.rideId && currentRideId && msg.rideId !== currentRideId) return;
       $("rideStatus").className = msg.phase === "arrived" ? "status ok" : "status wait";
       $("rideStatus").textContent = msg.message || "Motorista a caminho";
       if (msg.lat != null && msg.lng != null) updateTrackingMarker(msg.lat, msg.lng, msg.accuracy);
@@ -508,14 +580,8 @@ function ensureClientWs() {
       rideActive = false;
       currentRideId = null;
       showCancel(false);
-      requestCooldownUntil = Date.now() + 10000;
-      setRequestEnabled(false);
-      let left = 10;
-      const iv = setInterval(() => {
-        left -= 1;
-        if (left <= 0) { clearInterval(iv); setRequestEnabled(true); }
-        else $("btnRequest").textContent = `⏳ Aguarde ${left}s`;
-      }, 1000);
+      clearTracking();
+      startCooldown(10);
     } else if (msg.type === "ride_cancelled") {
       $("rideStatus").className = "status err";
       $("rideStatus").textContent = msg.message || "Corrida cancelada.";
@@ -523,80 +589,58 @@ function ensureClientWs() {
       currentRideId = null;
       showCancel(false);
       $("assignedBox").classList.add("hide");
-      if (trackingMarker && mapUser) { mapUser.removeLayer(trackingMarker); trackingMarker = null; }
-      if (trackingCircle && mapUser) { mapUser.removeLayer(trackingCircle); trackingCircle = null; }
+      clearTracking();
       refreshCancelInfo();
     }
   };
 }
 
-let rideActive = false;
-let requestCooldownUntil = 0;
-
-function setRequestEnabled(enabled) {
-  $("btnRequest").disabled = !enabled;
-  if (!enabled) {
-    $("btnRequest").textContent = "⏳ Indisponível";
-  } else {
-    $("btnRequest").textContent = "🚕 Solicitar corrida";
-  }
-}
-
-function showCancel(show) {
-  if (show) $("btnCancelRide").classList.remove("hide");
-  else $("btnCancelRide").classList.add("hide");
-}
-
-async function refreshCancelInfo() {
-  if (!clientId) return;
-  try {
-    const r = await fetch(`/api/client/${encodeURIComponent(clientId)}/stats`);
-    const d = await r.json();
-    if (!d.ok) return;
-    let t = `Cancelamentos: ${d.cancelCount} · grátis restantes: ${d.freeLeft}`;
-    if (d.pendingFee > 0) t += ` · taxa pendente R$ ${d.pendingFee.toFixed(2).replace(".", ",")}`;
-    $("cancelInfo").textContent = t;
-  } catch {}
-}
-
 $("btnRequest").onclick = async () => {
   if (rideActive) {
     $("rideStatus").className = "status err";
-    $("rideStatus").textContent = "Já existe uma corrida em andamento.";
+    $("rideStatus").textContent = "Já existe uma corrida em andamento. Cancele antes.";
+    showCancel(true);
     return;
   }
   if (Date.now() < requestCooldownUntil) {
     const s = Math.ceil((requestCooldownUntil - Date.now()) / 1000);
     $("rideStatus").className = "status wait";
-    $("rideStatus").textContent = `Aguarde ${s}s para solicitar de novo.`;
+    $("rideStatus").textContent = `Aguarde ${s}s`;
     return;
   }
   if (!originLatLng || !destLatLng) {
     $("rideStatus").className = "status err";
-    $("rideStatus").textContent = "Marque origem e destino";
+    $("rideStatus").textContent = "Defina origem e destino";
     return;
   }
   if (!lastPricing) {
     $("rideStatus").className = "status err";
-    $("rideStatus").textContent = "Clique em Ver valor antes de solicitar";
+    $("rideStatus").textContent = "Clique em Ver valor antes";
     return;
   }
+
   ensureClientWs();
   if (clientWs.readyState !== WebSocket.OPEN) {
-    await new Promise((r) => { clientWs.addEventListener("open", r, { once: true }); setTimeout(r, 2000); });
+    await new Promise((r) => {
+      clientWs.addEventListener("open", r, { once: true });
+      setTimeout(r, 2500);
+    });
   }
+
   $("assignedBox").classList.add("hide");
+  clearTracking();
   $("rideStatus").className = "status wait";
   $("rideStatus").textContent = "Solicitando...";
   setRequestEnabled(false);
   showCancel(true);
   rideActive = true;
+
   try {
     const res = await fetch("/api/ride/request", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        clientId,
+        clientId: ensureClientId(),
         passengerName: $("passengerName").value.trim() || "Passageiro",
         origin: { lat: originLatLng[0], lng: originLatLng[1], label: $("originText").value.trim() },
         destination: { lat: destLatLng[0], lng: destLatLng[1], label: $("destText").value.trim() },
@@ -607,15 +651,15 @@ $("btnRequest").onclick = async () => {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "falha");
     currentRideId = data.rideId;
-    $("rideStatus").className = "status wait";
     let msg = "Procurando motorista...";
     if (data.pricing?.cancelFee) {
-      msg += ` (inclui taxa cancelamento R$ ${Number(data.pricing.cancelFee).toFixed(2).replace(".", ",")})`;
+      msg += ` (taxa cancel. R$ ${Number(data.pricing.cancelFee).toFixed(2).replace(".", ",")})`;
     }
     $("rideStatus").textContent = msg;
     refreshCancelInfo();
   } catch (e) {
     rideActive = false;
+    currentRideId = null;
     showCancel(false);
     setRequestEnabled(true);
     $("rideStatus").className = "status err";
@@ -624,33 +668,33 @@ $("btnRequest").onclick = async () => {
 };
 
 $("btnCancelRide").onclick = async () => {
-  if (!currentRideId) return;
+  if (!currentRideId) {
+    $("rideStatus").className = "status err";
+    $("rideStatus").textContent = "Nenhuma corrida ativa para cancelar.";
+    showCancel(false);
+    rideActive = false;
+    return;
+  }
   $("btnCancelRide").disabled = true;
+  $("rideStatus").className = "status wait";
+  $("rideStatus").textContent = "Cancelando...";
   try {
-    const res = await fetch(`/api/ride/${encodeURIComponent(currentRideId)}/cancel`, { method: "POST" });
+    const res = await fetch(`/api/ride/${encodeURIComponent(currentRideId)}/cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId: ensureClientId() }),
+    });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "falha ao cancelar");
+
     rideActive = false;
     currentRideId = null;
     showCancel(false);
     $("assignedBox").classList.add("hide");
-    if (trackingMarker && mapUser) { mapUser.removeLayer(trackingMarker); trackingMarker = null; }
-    if (trackingCircle && mapUser) { mapUser.removeLayer(trackingCircle); trackingCircle = null; }
+    clearTracking();
     $("rideStatus").className = "status err";
     $("rideStatus").textContent = data.message || "Corrida cancelada.";
-    // bloqueia solicitar por 10s
-    requestCooldownUntil = Date.now() + 10000;
-    setRequestEnabled(false);
-    let left = 10;
-    const iv = setInterval(() => {
-      left -= 1;
-      if (left <= 0) {
-        clearInterval(iv);
-        setRequestEnabled(true);
-      } else {
-        $("btnRequest").textContent = `⏳ Aguarde ${left}s`;
-      }
-    }, 1000);
+    startCooldown(10);
     refreshCancelInfo();
   } catch (e) {
     $("rideStatus").className = "status err";
@@ -660,72 +704,50 @@ $("btnCancelRide").onclick = async () => {
   }
 };
 
-// ----- Motorista: upload foto -----
+// ----- Motorista -----
 $("btnUploadPhoto").onclick = async () => {
-  const fileInput = $("drvPhotoFile");
-  if (!fileInput.files || !fileInput.files[0]) {
-    $("profileStatus").textContent = "Escolha uma foto primeiro.";
-    return;
-  }
-  const file = fileInput.files[0];
-  if (file.size > 3 * 1024 * 1024) {
-    $("profileStatus").textContent = "Foto muito grande (máx. 3 MB).";
-    return;
-  }
-  $("profileStatus").textContent = "Enviando foto...";
+  const file = $("drvPhotoFile").files?.[0];
+  if (!file) { $("profileStatus").textContent = "Escolha uma foto"; return; }
+  if (file.size > 3 * 1024 * 1024) { $("profileStatus").textContent = "Máx. 3 MB"; return; }
+  $("profileStatus").textContent = "Enviando...";
+  showTab("driver");
   try {
     const fd = new FormData();
     fd.append("photo", file);
     const res = await fetch("/api/upload/photo", { method: "POST", body: fd });
     const data = await res.json();
-    if (!data.ok) throw new Error(data.error || "falha no upload");
-    const fullUrl = data.photoUrl.startsWith("http") ? data.photoUrl : (location.origin + data.photoUrl);
-    $("drvPhotoUrl").value = data.photoUrl;
-    $("photoPreview").src = fullUrl;
-    $("photoPreviewWrap").classList.remove("hide");
-    $("profileStatus").textContent = "Foto enviada. Agora clique em Salvar perfil.";
-    showTab("driver");
-    localStorage.setItem("rotasgo_tab", "driver");
-  } catch (e) {
-    $("profileStatus").textContent = e.message || "Erro no upload";
-  }
-};
-
-// ----- Motorista: perfil -----
-$("btnSaveProfile").onclick = async () => {
-  const body = {
-    driverId: $("driverId").value.trim(),
-    name: $("drvRegName").value.trim(),
-    plate: $("drvPlateIn").value.trim(),
-    model: $("drvModel").value.trim(),
-    color: $("drvColor").value.trim(),
-    photoUrl: $("drvPhotoUrl").value.trim() || null,
-  };
-  try {
-    const res = await fetch("/api/driver/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
     if (!data.ok) throw new Error(data.error || "falha");
-    $("profileStatus").textContent = "Perfil salvo.";
-    showTab("driver");
-    localStorage.setItem("rotasgo_tab", "driver");
+    $("drvPhotoUrl").value = data.photoUrl;
+    $("photoPreview").src = data.photoUrl.startsWith("http") ? data.photoUrl : location.origin + data.photoUrl;
+    $("photoPreviewWrap").classList.remove("hide");
+    $("profileStatus").textContent = "Foto ok. Salve o perfil.";
   } catch (e) {
     $("profileStatus").textContent = e.message;
   }
 };
 
-// ----- Motorista: online / GPS -----
-async function requestWakeLock() {
+$("btnSaveProfile").onclick = async () => {
+  showTab("driver");
   try {
-    if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen");
-  } catch {}
-}
-function releaseWakeLock() {
-  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
-}
+    const res = await fetch("/api/driver/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        driverId: $("driverId").value.trim(),
+        name: $("drvRegName").value.trim(),
+        plate: $("drvPlateIn").value.trim(),
+        model: $("drvModel").value.trim(),
+        color: $("drvColor").value.trim(),
+        photoUrl: $("drvPhotoUrl").value.trim() || null,
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "falha");
+    $("profileStatus").textContent = "Perfil salvo.";
+  } catch (e) {
+    $("profileStatus").textContent = e.message;
+  }
+};
 
 function wsUrl(role, id) {
   const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -737,27 +759,37 @@ function connectDriverWs() {
   if (!driverId) return;
   if (driverWs) try { driverWs.close(); } catch {}
   driverWs = new WebSocket(wsUrl("driver", driverId));
-  driverWs.onopen = () => { $("rideConnStatus").textContent = `Online como ${driverId}. Aguardando corridas...`; };
+  driverWs.onopen = () => { $("rideConnStatus").textContent = `Online como ${driverId}. Aguardando...`; };
   driverWs.onclose = () => { $("rideConnStatus").textContent = "Desconectado do despacho."; };
   driverWs.onmessage = (ev) => {
-    let msg; try { msg = JSON.parse(ev.data); } catch { return; }
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
     if (msg.type === "ride_offer") {
       currentOffer = msg;
       $("rideOfferBox").classList.remove("hide");
       const p = msg.pricing || {};
       $("rideOfferInfo").className = "status wait";
       $("rideOfferInfo").innerHTML =
-        `<strong>${msg.passengerName || "Passageiro"}</strong><br>` +
+        `<strong>${msg.passengerName || "Passageiro"}</strong> · ${p.serviceLabel || ""}<br>` +
         `📍 ${(msg.origin && msg.origin.label) || "Embarque"} → 🏁 ${(msg.destination && msg.destination.label) || "Destino"}<br>` +
-        `Até o embarque: ~${msg.distanceToPickupKm} km<br>` +
-        `Corrida: ~${p.distanceKm || "?"} km · <strong>R$ ${(p.total || 0).toFixed(2).replace(".", ",")}</strong><br>` +
-        `Responda em ${msg.expiresInSeconds}s`;
+        `Até embarque: ~${msg.distanceToPickupKm} km<br>` +
+        `~${p.distanceKm || "?"} km · <strong>R$ ${Number(p.total || 0).toFixed(2).replace(".", ",")}</strong><br>` +
+        `${msg.expiresInSeconds}s para responder`;
     } else if (msg.type === "ride_cancelled") {
       $("rideOfferBox").classList.add("hide");
       currentOffer = null;
-      $("rideConnStatus").textContent = msg.message || "Passageiro cancelou a corrida.";
+      $("rideConnStatus").textContent = "⚠️ " + (msg.message || "Passageiro cancelou a corrida.");
+      $("driverStatus").className = "status wait";
+      $("driverStatus").textContent = "Corrida cancelada pelo passageiro. Você continua online.";
     }
   };
+}
+
+async function requestWakeLock() {
+  try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch {}
+}
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
 }
 
 async function sendPos(pos) {
@@ -790,8 +822,12 @@ async function sendPos(pos) {
 
 $("btnGoOnline").onclick = () => {
   const driverId = $("driverId").value.trim();
-  if (!driverId) { $("driverStatus").className = "status err"; $("driverStatus").textContent = "Informe o ID"; return; }
-  if (!navigator.geolocation) { $("driverStatus").className = "status err"; $("driverStatus").textContent = "Sem GPS"; return; }
+  if (!driverId) return;
+  if (!navigator.geolocation) {
+    $("driverStatus").className = "status err";
+    $("driverStatus").textContent = "Sem GPS";
+    return;
+  }
   $("btnGoOnline").disabled = true;
   $("btnGoOffline").disabled = false;
   $("driverStatus").className = "status wait";
@@ -833,45 +869,31 @@ function respondRide(response) {
   }));
   $("rideOfferBox").classList.add("hide");
   currentOffer = null;
-  if (response === "accept") {
-    $("rideConnStatus").textContent = "Corrida aceita! Leve o passageiro.";
-  }
+  if (response === "accept") $("rideConnStatus").textContent = "Corrida aceita!";
 }
 $("btnAccept").onclick = () => respondRide("accept");
 $("btnDecline").onclick = () => respondRide("decline");
 
 // ----- Boot -----
-async function checkBackend() {
-  try {
-    const r = await fetch("/health", { cache: "no-store" });
-    const d = await r.json();
-    if (d.ok) {
-      $("backendBadge").textContent = `V${d.version}${d.db ? "+DB" : ""}`;
-      $("activeBadge").textContent = `${d.activeDrivers} online`;
-    }
-  } catch { $("backendBadge").textContent = "offline"; }
-}
-
+setService(serviceType);
+ensureClientId();
 checkBackend();
 loadDrivers();
 setInterval(checkBackend, 15000);
 setInterval(loadDrivers, 5000);
-// restaura aba (evita voltar pra Usuário ao tirar foto no celular)
+
 const savedTab = localStorage.getItem("rotasgo_tab") || "user";
 showTab(savedTab);
-if (savedTab === "user") {
-  setTimeout(() => {
+setTimeout(() => {
+  if (savedTab === "user") {
     initMapUser();
-    autoUserOrigin();
-  }, 150);
-} else {
-  // ainda pede GPS do usuário em background para quando trocar de aba
-  setTimeout(autoUserOrigin, 500);
-}
-// clientId estável
-clientId = localStorage.getItem("rotasgo_clientId") || ("CLI-" + Math.random().toString(36).slice(2, 8).toUpperCase());
-localStorage.setItem("rotasgo_clientId", clientId);
-setTimeout(refreshCancelInfo, 300);
+    autoUserOrigin(false);
+  } else {
+    setTimeout(() => autoUserOrigin(false), 400);
+  }
+  refreshCancelInfo();
+}, 200);
+
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && sendWatchId != null) requestWakeLock();
 });
