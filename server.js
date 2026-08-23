@@ -2,6 +2,9 @@ import express from "express";
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import { randomUUID } from "crypto";
+import multer from "multer";
+import fs from "fs";
+import path from "path";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,14 +13,33 @@ const OFFER_TIMEOUT_MS = Number(process.env.OFFER_TIMEOUT_MS || 20000);
 const PRICE_PER_KM = Number(process.env.PRICE_PER_KM || 1.0);
 const APP_FEE = Number(process.env.APP_FEE || 0.6);
 
+const UPLOAD_DIR = path.join(process.cwd(), "uploads");
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || "").toLowerCase() || ".jpg";
+    const safe = [".jpg", ".jpeg", ".png", ".webp", ".gif"].includes(ext) ? ext : ".jpg";
+    cb(null, `${Date.now()}-${randomUUID().slice(0, 8)}${safe}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 3 * 1024 * 1024 }, // 3 MB
+  fileFilter: (_req, file, cb) => {
+    if (/^image\/(jpeg|png|webp|gif)$/.test(file.mimetype)) cb(null, true);
+    else cb(new Error("Apenas imagens JPG, PNG, WEBP ou GIF"));
+  },
+});
+
 app.use(express.json({ limit: "64kb" }));
 app.use(express.static("public"));
+app.use("/uploads", express.static(UPLOAD_DIR));
 
-// driverId -> { driverId, name, plate, model, color, photoUrl, updatedAt }
 const profiles = new Map();
-// driverId -> location + status
 const locations = new Map();
-// rideId -> ride
 const rides = new Map();
 const driverSockets = new Map();
 const clientSockets = new Map();
@@ -89,12 +111,11 @@ function publicDriver(driverId) {
   };
 }
 
-// ---------- Health ----------
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     service: "rotas-go-rides",
-    version: "6.0",
+    version: "6.1",
     uptimeSeconds: Math.round(process.uptime()),
     activeDrivers: locations.size,
     profiles: profiles.size,
@@ -106,7 +127,26 @@ app.get("/health", (_req, res) => {
   });
 });
 
-// ---------- Cadastro / perfil do motorista ----------
+// ---------- Upload de foto ----------
+app.post("/api/upload/photo", (req, res) => {
+  upload.single("photo")(req, res, (err) => {
+    if (err) {
+      return json(res, 400, { ok: false, error: err.message || "upload_falhou" });
+    }
+    if (!req.file) {
+      return json(res, 400, { ok: false, error: "arquivo_obrigatorio" });
+    }
+    const photoUrl = `/uploads/${req.file.filename}`;
+    return json(res, 200, {
+      ok: true,
+      photoUrl,
+      size: req.file.size,
+      mime: req.file.mimetype,
+    });
+  });
+});
+
+// ---------- Cadastro / perfil ----------
 app.post("/api/driver/profile", (req, res) => {
   const driverId = String(req.body?.driverId || "").trim();
   const name = String(req.body?.name || "").trim();
@@ -128,7 +168,6 @@ app.post("/api/driver/profile", (req, res) => {
     updatedAt: Date.now(),
   };
   profiles.set(driverId, profile);
-
   return json(res, 200, { ok: true, profile });
 });
 
@@ -138,7 +177,6 @@ app.get("/api/driver/:driverId", (req, res) => {
   return json(res, 200, { ok: true, profile: publicDriver(req.params.driverId) });
 });
 
-// ---------- Localização ----------
 app.post("/api/location/update", (req, res) => {
   const driverId = String(req.body?.driverId || "").trim();
   const lat = Number(req.body?.lat);
@@ -163,7 +201,6 @@ app.post("/api/location/update", (req, res) => {
     expiresAt: now + LOCATION_TTL_MS,
   };
   locations.set(driverId, location);
-
   return json(res, 200, { ok: true, saved: true, location });
 });
 
@@ -175,7 +212,12 @@ app.get("/api/location/:driverId", (req, res) => {
     locations.delete(req.params.driverId);
     return json(res, 410, { ok: true, found: false, expired: true });
   }
-  return json(res, 200, { ok: true, found: true, location, driver: publicDriver(req.params.driverId) });
+  return json(res, 200, {
+    ok: true,
+    found: true,
+    location,
+    driver: publicDriver(req.params.driverId),
+  });
 });
 
 app.get("/api/locations", (_req, res) => {
@@ -184,47 +226,32 @@ app.get("/api/locations", (_req, res) => {
   return json(res, 200, { ok: true, count: list.length, locations: list });
 });
 
-// ---------- Estimar preço (sem criar corrida) ----------
 app.post("/api/ride/estimate", async (req, res) => {
   const origin = req.body?.origin;
   const destination = req.body?.destination;
-  const valid = (p) =>
-    p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng));
-
+  const valid = (p) => p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng));
   if (!valid(origin) || !valid(destination)) {
     return json(res, 400, { ok: false, error: "origem_ou_destino_invalidos" });
   }
-
   const o = { lat: Number(origin.lat), lng: Number(origin.lng) };
   const d = { lat: Number(destination.lat), lng: Number(destination.lng) };
-
-  // tenta rota real via OSRM; fallback haversine * 1.3
   let distanceKm = haversineKm(o, d) * 1.3;
   try {
     const url = `https://router.project-osrm.org/route/v1/driving/${o.lng},${o.lat};${d.lng},${d.lat}?overview=false`;
     const r = await fetch(url);
     const data = await r.json();
-    if (data.code === "Ok" && data.routes?.[0]) {
-      distanceKm = data.routes[0].distance / 1000;
-    }
-  } catch {
-    // usa fallback
-  }
-
-  const pricing = calcPrice(distanceKm);
-  return json(res, 200, { ok: true, ...pricing });
+    if (data.code === "Ok" && data.routes?.[0]) distanceKm = data.routes[0].distance / 1000;
+  } catch {}
+  return json(res, 200, { ok: true, ...calcPrice(distanceKm) });
 });
 
-// ---------- Despacho ----------
 function offerNextDriver(ride) {
   cleanExpired();
-
   const candidates = Array.from(locations.values()).filter(
     (loc) =>
       (loc.status || "available") === "available" &&
       !ride.rejectedBy.has(loc.driverId)
   );
-
   if (candidates.length === 0) {
     ride.status = "no_driver";
     ride.offeredTo = null;
@@ -236,21 +263,14 @@ function offerNextDriver(ride) {
     });
     return;
   }
-
-  candidates.sort(
-    (a, b) => haversineKm(ride.origin, a) - haversineKm(ride.origin, b)
-  );
-
+  candidates.sort((a, b) => haversineKm(ride.origin, a) - haversineKm(ride.origin, b));
   const driver = candidates[0];
   const distanceKm = haversineKm(ride.origin, driver);
-
   ride.offeredTo = driver.driverId;
   ride.status = "offered";
   ride.updatedAt = Date.now();
   ride.attempts += 1;
-
   const profile = profiles.get(driver.driverId) || {};
-
   const delivered = sendTo(driverSockets, driver.driverId, {
     type: "ride_offer",
     rideId: ride.rideId,
@@ -261,17 +281,14 @@ function offerNextDriver(ride) {
     pricing: ride.pricing,
     expiresInSeconds: Math.round(OFFER_TIMEOUT_MS / 1000),
   });
-
   notifyClient(ride, {
     type: "ride_searching",
     rideId: ride.rideId,
     message: `Procurando motorista... (tentativa ${ride.attempts})`,
     offeredTo: profile.name || driver.driverId,
   });
-
   if (ride.timer) clearTimeout(ride.timer);
   const timeout = delivered ? OFFER_TIMEOUT_MS : 1500;
-
   ride.timer = setTimeout(() => {
     ride.rejectedBy.add(driver.driverId);
     ride.offeredTo = null;
@@ -285,28 +302,26 @@ app.post("/api/ride/request", (req, res) => {
   const origin = req.body?.origin;
   const destination = req.body?.destination;
   const pricingIn = req.body?.pricing;
-
   const validPoint = (p) =>
     p &&
     Number.isFinite(Number(p.lat)) &&
     Number.isFinite(Number(p.lng)) &&
     Math.abs(Number(p.lat)) <= 90 &&
     Math.abs(Number(p.lng)) <= 180;
-
   if (!clientId) return json(res, 400, { ok: false, error: "clientId_obrigatorio" });
   if (!validPoint(origin) || !validPoint(destination)) {
     return json(res, 400, { ok: false, error: "origem_ou_destino_invalidos" });
   }
-
   const o = { lat: Number(origin.lat), lng: Number(origin.lng), label: origin.label || null };
-  const d = { lat: Number(destination.lat), lng: Number(destination.lng), label: destination.label || null };
-
+  const d = {
+    lat: Number(destination.lat),
+    lng: Number(destination.lng),
+    label: destination.label || null,
+  };
   let pricing = pricingIn;
   if (!pricing || !Number.isFinite(Number(pricing.total))) {
-    const km = haversineKm(o, d) * 1.3;
-    pricing = calcPrice(km);
+    pricing = calcPrice(haversineKm(o, d) * 1.3);
   }
-
   const rideId = randomUUID();
   const ride = {
     rideId,
@@ -324,17 +339,14 @@ app.post("/api/ride/request", (req, res) => {
     updatedAt: Date.now(),
     timer: null,
   };
-
   rides.set(rideId, ride);
   offerNextDriver(ride);
-
   return json(res, 200, { ok: true, rideId, status: ride.status, pricing });
 });
 
 app.get("/api/ride/:rideId", (req, res) => {
   const ride = rides.get(req.params.rideId);
   if (!ride) return json(res, 404, { ok: false, error: "corrida_nao_encontrada" });
-
   return json(res, 200, {
     ok: true,
     rideId: ride.rideId,
@@ -351,7 +363,6 @@ app.get("/api/ride/:rideId", (req, res) => {
 app.post("/api/ride/:rideId/finish", (req, res) => {
   const ride = rides.get(req.params.rideId);
   if (!ride) return json(res, 404, { ok: false, error: "corrida_nao_encontrada" });
-
   if (ride.timer) clearTimeout(ride.timer);
   if (ride.assignedDriverId) {
     const loc = locations.get(ride.assignedDriverId);
@@ -359,12 +370,10 @@ app.post("/api/ride/:rideId/finish", (req, res) => {
   }
   ride.status = "finished";
   ride.updatedAt = Date.now();
-
   notifyClient(ride, { type: "ride_finished", rideId: ride.rideId });
   return json(res, 200, { ok: true, rideId: ride.rideId, status: ride.status });
 });
 
-// ================= WEBSOCKET =================
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
 
@@ -376,7 +385,6 @@ wss.on("connection", (ws, req) => {
     role = url.searchParams.get("role");
     id = url.searchParams.get("id");
   } catch {}
-
   if (role === "driver" && id) {
     driverSockets.set(id, ws);
     ws.driverId = id;
@@ -384,7 +392,6 @@ wss.on("connection", (ws, req) => {
     clientSockets.set(id, ws);
     ws.clientId = id;
   }
-
   ws.on("message", (raw) => {
     let msg;
     try {
@@ -392,22 +399,17 @@ wss.on("connection", (ws, req) => {
     } catch {
       return;
     }
-
     if (msg.type === "ride_response") {
       const ride = rides.get(msg.rideId);
       if (!ride || ride.status !== "offered" || ride.offeredTo !== msg.driverId) return;
-
       if (ride.timer) clearTimeout(ride.timer);
-
       if (msg.response === "accept") {
         ride.status = "accepted";
         ride.assignedDriverId = msg.driverId;
         ride.offeredTo = null;
         ride.updatedAt = Date.now();
-
         const loc = locations.get(msg.driverId);
         if (loc) loc.status = "busy";
-
         notifyClient(ride, {
           type: "ride_assigned",
           rideId: ride.rideId,
@@ -422,7 +424,6 @@ wss.on("connection", (ws, req) => {
       }
     }
   });
-
   ws.on("close", () => {
     if (ws.driverId && driverSockets.get(ws.driverId) === ws) driverSockets.delete(ws.driverId);
     if (ws.clientId && clientSockets.get(ws.clientId) === ws) clientSockets.delete(ws.clientId);
@@ -432,5 +433,5 @@ wss.on("connection", (ws, req) => {
 setInterval(cleanExpired, 15000);
 
 server.listen(PORT, () => {
-  console.log(`[Rotas GO] V6.0 rides on port ${PORT}`);
+  console.log(`[Rotas GO] V6.1 rides + photo upload on port ${PORT}`);
 });
