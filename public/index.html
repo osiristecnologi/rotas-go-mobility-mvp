@@ -1,725 +1,566 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Rotas GO — Goiás ao Vivo</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>
-*{box-sizing:border-box}
-body{margin:0;background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-header{background:#f97316;color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
-header h1{margin:0;font-size:18px}
-header .sub{font-size:11px;opacity:.9}
-main{max-width:900px;margin:0 auto;padding:10px}
-.card{background:#1e293b;border-radius:14px;padding:14px;margin-bottom:10px;border:1px solid #334155}
-h2{margin:0 0 10px;font-size:15px;color:#f8fafc}
-label{display:block;font-weight:700;font-size:12px;margin-top:8px;color:#94a3b8}
-input,button,select{width:100%;font:inherit;padding:11px;border-radius:10px;margin-top:5px;border:0}
-input,select{background:#0f172a;color:#e2e8f0;border:1px solid #475569}
-button{background:#f97316;color:#fff;font-weight:800;cursor:pointer}
-button.secondary{background:#475569}
-button.danger{background:#dc2626}
-button:disabled{opacity:.5}
-.row{display:flex;gap:8px}
-.row>*{flex:1}
-.status{margin-top:10px;padding:10px;border-radius:10px;font-weight:700;font-size:13px;background:#0f172a}
-.status.ok{background:#064e3b;color:#6ee7b7}
-.status.err{background:#7f1d1d;color:#fecaca}
-.status.wait{background:#78350f;color:#fde68a}
-#map{height:380px;border-radius:12px;border:1px solid #334155;z-index:1}
-.tabs{display:flex;gap:6px;margin-bottom:10px}
-.tabs button{background:#334155}
-.tabs button.active{background:#f97316}
-.badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#334155;font-size:11px;margin-right:4px}
-.hint{font-size:11px;color:#94a3b8;margin-top:6px;line-height:1.4}
-pre{white-space:pre-wrap;word-break:break-word;background:#0f172a;color:#94a3b8;padding:10px;border-radius:10px;font-size:11px;max-height:120px;overflow:auto}
-.leaflet-container{background:#1e293b}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Rotas GO — Dispatch V6</title>
+
+  <style>
+    body {
+      font-family: system-ui;
+      margin: 0;
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+
+    header {
+      background: #f97316;
+      color: #fff;
+      padding: 18px;
+    }
+
+    main {
+      max-width: 900px;
+      margin: 18px auto;
+      padding: 0 14px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 18px;
+      margin: 12px 0;
+      box-shadow: 0 2px 10px #0001;
+    }
+
+    input,
+    button {
+      width: 100%;
+      padding: 12px;
+      margin: 6px 0;
+      border-radius: 10px;
+      border: 1px solid #cbd5e1;
+      font: inherit;
+    }
+
+    button {
+      background: #f97316;
+      color: #fff;
+      border: 0;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .ok {
+      background: #dcfce7;
+      padding: 10px;
+      border-radius: 10px;
+    }
+
+    .warn {
+      background: #fef3c7;
+      padding: 10px;
+      border-radius: 10px;
+    }
+
+    .offer {
+      background: #fff7ed;
+      border: 2px solid #f97316;
+      padding: 14px;
+      border-radius: 14px;
+    }
+
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 12px;
+      border-radius: 10px;
+      white-space: pre-wrap;
+    }
+  </style>
 </head>
+
 <body>
+
 <header>
-  <div>
-    <h1>🦈 Rotas GO — Goiás</h1>
-    <div class="sub">Localização ao vivo · mapa do estado</div>
-  </div>
-  <div>
-    <span id="backendBadge" class="badge">…</span>
-    <span id="activeBadge" class="badge">0 ativos</span>
-  </div>
+  <h1>🚕 Rotas GO — Dispatch V6</h1>
+  <div>Teste: localizar → chamar → aceitar/recusar</div>
 </header>
 
 <main>
-  <div class="tabs">
-    <button id="tabDriver" class="active">📱 Motorista</button>
-    <button id="tabViewer">🗺 Painel</button>
-  </div>
 
   <!-- MOTORISTA -->
-  <section id="panelDriver">
-    <div class="card">
-      <h2>Compartilhar localização</h2>
-      <label>ID do Motorista</label>
-      <input id="driverId" value="DRV-TESTE-34912" autocomplete="off">
+  <section class="card">
 
-      <div class="row" style="margin-top:12px">
-        <button id="btnStart">▶ Iniciar</button>
-        <button id="btnStop" class="danger" disabled>■ Parar</button>
-      </div>
-      <div id="driverStatus" class="status">Parado. Mantenha a tela ligada para melhor persistência.</div>
-      <p class="hint">
-        Use um ID simples (ex: DRV-34912). O envio continua enquanto a aba estiver aberta.
-        Se o celular bloquear a tela por muito tempo, o navegador pode pausar o GPS.
-      </p>
+    <h2>👤 Simular motorista</h2>
+
+    <input
+      id="driverId"
+      value="DRV-34912"
+      placeholder="ID do motorista"
+    >
+
+    <input
+      id="lat"
+      placeholder="Latitude"
+      value="-16.3265"
+    >
+
+    <input
+      id="lng"
+      placeholder="Longitude"
+      value="-48.9528"
+    >
+
+    <button onclick="connectDriver()">
+      🟢 Conectar motorista
+    </button>
+
+    <button onclick="sendLocation()">
+      📍 Enviar localização
+    </button>
+
+    <div id="driverStatus" class="warn">
+      Offline
     </div>
-    <div class="card">
-      <h2>Último envio</h2>
-      <pre id="driverLog">Nenhum envio ainda.</pre>
-    </div>
+
   </section>
 
-  <!-- PAINEL / MAPA -->
-  <section id="panelViewer" style="display:none">
-    <div class="card">
-      <h2>Acompanhar no mapa (Goiás)</h2>
-      <label>ID do Motorista</label>
-      <input id="watchId" value="DRV-TESTE-34912" autocomplete="off">
 
-      <div class="row" style="margin-top:12px">
-        <button id="btnWatchStart">▶ Acompanhar</button>
-        <button id="btnWatchStop" class="secondary" disabled>■ Parar</button>
-      </div>
-      <div id="viewerStatus" class="status">Informe o ID e clique em Acompanhar.</div>
-    </div>
+  <!-- CLIENTE -->
+  <section class="card">
 
-    <div class="card" style="padding:8px">
-      <div id="map"></div>
-    </div>
+    <h2>👤 Simular cliente</h2>
 
-    <div class="card">
-      <h2>🧭 Calcular rota (grátis · OSRM)</h2>
+    <input
+      id="pickupLabel"
+      value="Av. Brasil, Anápolis"
+      placeholder="Origem"
+    >
 
-      <label>Origem (endereço, bairro, rua...)</label>
-      <input id="originText" placeholder="Ex: Rua Q, Setor Bueno, Goiânia" autocomplete="off">
-      <label>Destino (endereço, bairro, rua...)</label>
-      <input id="destText" placeholder="Ex: Lote 12, Jardim América, Goiânia" autocomplete="off">
-      <button id="btnSearchAddresses" class="secondary" style="margin-top:8px">🔎 Buscar endereços</button>
-      <p class="hint">Dica: quanto mais completo (rua + bairro + cidade), melhor a precisão. A busca usa o geocodificador gratuito OpenStreetMap (Nominatim). Se a rua for muito nova ou informal (ex: "VP-05" de loteamento) e não estiver mapeada, o sistema avisa "aproximado" — nesse caso, arraste o pino 🟢/🏁 no mapa até o ponto certo.</p>
+    <input
+      id="pickupLat"
+      value="-16.3265"
+      placeholder="Latitude origem"
+    >
 
-      <div class="row" style="margin-top:12px">
-        <button id="btnPickOrigin" class="secondary">📍 Marcar origem no mapa</button>
-        <button id="btnPickDest" class="secondary">🏁 Marcar destino no mapa</button>
-      </div>
-      <div class="row" style="margin-top:8px">
-        <button id="btnCalcRoute">Calcular rota</button>
-        <button id="btnClearRoute" class="secondary">✕ Limpar</button>
-      </div>
-      <div id="routeStatus" class="status">Marque origem e destino no mapa ou busque por nome.</div>
-    </div>
+    <input
+      id="pickupLng"
+      value="-48.9520"
+      placeholder="Longitude origem"
+    >
 
-    <div class="card">
-      <h2>🟢 Motoristas online</h2>
-      <div id="driversList" class="hint">Carregando...</div>
-    </div>
+    <input
+      id="destLabel"
+      value="Centro, Anápolis"
+      placeholder="Destino"
+    >
 
-    <div class="card">
-      <h2>Dados</h2>
-      <pre id="viewerResult">—</pre>
-      <p id="mapLink" class="hint"></p>
-    </div>
+    <input
+      id="destLat"
+      value="-16.3280"
+      placeholder="Latitude destino"
+    >
+
+    <input
+      id="destLng"
+      value="-48.9535"
+      placeholder="Longitude destino"
+    >
+
+    <button onclick="requestRide()">
+      🚕 Pedir corrida
+    </button>
+
+    <pre id="rideResult">
+Nenhuma corrida.
+    </pre>
+
   </section>
+
+
+  <!-- OFERTA -->
+  <section class="card">
+
+    <h2>📱 Oferta recebida pelo motorista</h2>
+
+    <div id="offer">
+      Nenhuma oferta.
+    </div>
+
+  </section>
+
+
+  <!-- LOG -->
+  <section class="card">
+
+    <h2>🔌 Diagnóstico</h2>
+
+    <pre id="log"></pre>
+
+  </section>
+
 </main>
 
+
 <script>
+
+let ws = null;
+let currentRide = null;
+
 const $ = id => document.getElementById(id);
 
-// ----- Goiás bounds (aprox.) -----
-const GOIAS_BOUNDS = L.latLngBounds(
-  [-19.6, -53.4], // SW
-  [-12.3, -45.8]  // NE
-);
-const GOIAS_CENTER = [-16.0, -49.5];
 
-let map, marker, accuracyCircle;
-let sendWatchId = null;
-let sendTimer = null;
-let watchTimer = null;
-let wakeLock = null;
+function log(x) {
 
-// ----- Tabs -----
-$("tabDriver").onclick = () => {
-  $("tabDriver").classList.add("active");
-  $("tabViewer").classList.remove("active");
-  $("panelDriver").style.display = "";
-  $("panelViewer").style.display = "none";
-};
-$("tabViewer").onclick = () => {
-  $("tabViewer").classList.add("active");
-  $("tabDriver").classList.remove("active");
-  $("panelDriver").style.display = "none";
-  $("panelViewer").style.display = "";
-  setTimeout(() => {
-    if (!map) initMap();
-    else map.invalidateSize();
-  }, 80);
-};
+  $("log").textContent =
+    JSON.stringify(x, null, 2);
 
-// ----- Map -----
-function initMap() {
-  map = L.map("map", {
-    center: GOIAS_CENTER,
-    zoom: 7,
-    maxBounds: GOIAS_BOUNDS.pad(0.15),
-    maxBoundsViscosity: 0.8,
-    minZoom: 6,
-    maxZoom: 18,
-  });
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "© OpenStreetMap",
-    maxZoom: 19,
-  }).addTo(map);
-
-  // leve destaque da área de Goiás
-  L.rectangle(GOIAS_BOUNDS, {
-    color: "#f97316",
-    weight: 1,
-    fillOpacity: 0.03,
-    interactive: false,
-  }).addTo(map);
-
-  map.on("click", onMapClickForRoute);
 }
 
-function updateMarker(lat, lng, accuracy) {
-  if (!map) initMap();
 
-  const latlng = [lat, lng];
+/* =========================
+   LOCALIZAÇÃO DO MOTORISTA
+========================= */
 
-  if (!marker) {
-    marker = L.marker(latlng, { title: "Motorista" }).addTo(map);
-    marker.bindPopup("Motorista").openPopup();
-  } else {
-    marker.setLatLng(latlng);
-  }
+async function sendLocation() {
 
-  if (accuracyCircle) {
-    accuracyCircle.setLatLng(latlng).setRadius(accuracy || 30);
-  } else {
-    accuracyCircle = L.circle(latlng, {
-      radius: accuracy || 30,
-      color: "#38bdf8",
-      fillColor: "#38bdf8",
-      fillOpacity: 0.15,
-      weight: 1,
-    }).addTo(map);
-  }
+  const body = {
 
-  // se estiver longe, centraliza; se perto, só move um pouco
-  const zoom = map.getZoom();
-  if (zoom < 12) {
-    map.setView(latlng, 14, { animate: true });
-  } else {
-    map.panTo(latlng, { animate: true });
-  }
-}
+    driverId: $("driverId").value,
 
-// ----- Backend -----
-async function checkBackend() {
-  try {
-    const r = await fetch("/health", { cache: "no-store" });
-    const d = await r.json();
-    if (d.ok) {
-      $("backendBadge").textContent = `V${d.version}`;
-      $("activeBadge").textContent = `${d.activeDrivers ?? 0} ativos`;
-    }
-  } catch {
-    $("backendBadge").textContent = "offline";
-  }
-}
+    lat: Number($("lat").value),
 
-// ----- Wake Lock (tenta manter tela ligada) -----
-async function requestWakeLock() {
-  try {
-    if ("wakeLock" in navigator) {
-      wakeLock = await navigator.wakeLock.request("screen");
-      wakeLock.addEventListener("release", () => {
-        console.log("Wake lock released");
-      });
-    }
-  } catch (e) {
-    console.log("Wake lock não disponível", e);
-  }
-}
+    lng: Number($("lng").value),
 
-function releaseWakeLock() {
-  if (wakeLock) {
-    wakeLock.release().catch(() => {});
-    wakeLock = null;
-  }
-}
+    accuracy: 10
 
-// Re-adquire wake lock quando a aba volta
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && sendWatchId != null) {
-    requestWakeLock();
-  }
-});
+  };
 
-// ----- Motorista -----
-async function sendPosition(pos) {
-  const driverId = $("driverId").value.trim();
-  if (!driverId) return;
 
-  const { latitude: lat, longitude: lng, accuracy } = pos.coords;
-
-  try {
-    const res = await fetch("/api/location/update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ driverId, lat, lng, accuracy }),
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || "falha");
-
-    $("driverStatus").className = "status ok";
-    $("driverStatus").textContent = `Enviado · ~${Math.round(accuracy || 0)} m · ${new Date().toLocaleTimeString()}`;
-    $("driverLog").textContent = JSON.stringify(
-      { driverId, lat, lng, accuracy, updatedAt: new Date().toLocaleString() },
-      null,
-      2
-    );
-    checkBackend();
-  } catch (err) {
-    $("driverStatus").className = "status err";
-    $("driverStatus").textContent = err.message || "Erro ao enviar";
-  }
-}
-
-function startSending() {
-  const driverId = $("driverId").value.trim();
-  if (!driverId) {
-    $("driverStatus").className = "status err";
-    $("driverStatus").textContent = "Informe o ID do motorista";
-    return;
-  }
-
-  if (!navigator.geolocation) {
-    $("driverStatus").className = "status err";
-    $("driverStatus").textContent = "GPS não suportado";
-    return;
-  }
-
-  $("btnStart").disabled = true;
-  $("btnStop").disabled = false;
-  $("driverStatus").className = "status wait";
-  $("driverStatus").textContent = "Solicitando GPS...";
-
-  requestWakeLock();
-
-  // watchPosition é mais persistente que setInterval + getCurrentPosition
-  sendWatchId = navigator.geolocation.watchPosition(
-    (pos) => sendPosition(pos),
-    (err) => {
-      $("driverStatus").className = "status err";
-      $("driverStatus").textContent =
-        err.code === 1 ? "Permissão negada" : err.message || "Erro no GPS";
-    },
+  const response = await fetch(
+    "/api/location/update",
     {
-      enableHighAccuracy: true,
-      maximumAge: 4000,
-      timeout: 15000,
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json"
+      },
+
+      body: JSON.stringify(body)
     }
   );
 
-  // backup: força envio periódico caso o watch fique quieto
-  sendTimer = setInterval(() => {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => sendPosition(pos),
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 8000, timeout: 10000 }
-    );
-  }, 10000);
+
+  log(await response.json());
+
 }
 
-function stopSending() {
-  if (sendWatchId != null) {
-    navigator.geolocation.clearWatch(sendWatchId);
-    sendWatchId = null;
+
+/* =========================
+   CONECTAR MOTORISTA
+========================= */
+
+function connectDriver() {
+
+  const id =
+    $("driverId").value.trim();
+
+
+  if (ws) {
+    ws.close();
   }
-  if (sendTimer) {
-    clearInterval(sendTimer);
-    sendTimer = null;
-  }
-  releaseWakeLock();
-  $("btnStart").disabled = false;
-  $("btnStop").disabled = true;
-  $("driverStatus").className = "status";
-  $("driverStatus").textContent = "Parado.";
-}
 
-$("btnStart").onclick = startSending;
-$("btnStop").onclick = stopSending;
 
-// ----- Painel / Acompanhar -----
-async function watchOnce() {
-  const id = $("watchId").value.trim();
-  if (!id) return;
+  const protocol =
+    location.protocol === "https:"
+      ? "wss"
+      : "ws";
 
-  try {
-    const res = await fetch(`/api/location/${encodeURIComponent(id)}`, { cache: "no-store" });
-    const data = await res.json();
 
-    if (!data.found) {
-      $("viewerStatus").className = "status err";
-      $("viewerStatus").textContent = data.expired
-        ? "Expirou (sem atualização recente)"
-        : "Motorista ainda não enviou";
-      $("viewerResult").textContent = JSON.stringify(data, null, 2);
-      $("mapLink").textContent = "";
-      return;
+  ws = new WebSocket(
+    `${protocol}://${location.host}/ws?driverId=${encodeURIComponent(id)}`
+  );
+
+
+  ws.onopen = () => {
+
+    $("driverStatus").className = "ok";
+
+    $("driverStatus").textContent =
+      "🟢 Conectado ao backend";
+
+
+    // envia a localização assim que conecta
+    sendLocation();
+
+  };
+
+
+  ws.onclose = () => {
+
+    $("driverStatus").className = "warn";
+
+    $("driverStatus").textContent =
+      "🔴 WebSocket offline";
+
+  };
+
+
+  ws.onmessage = event => {
+
+    const message =
+      JSON.parse(event.data);
+
+
+    if (message.type === "RIDE_OFFER") {
+
+      currentRide = message;
+
+      renderOffer(message);
+
     }
 
-    const loc = data.location;
-    const age = Math.round((Date.now() - loc.updatedAt) / 1000);
+    else if (
+      message.type === "RIDE_OFFER_EXPIRED"
+    ) {
 
-    $("viewerStatus").className = "status ok";
-    $("viewerStatus").textContent = `Ao vivo · há ${age}s · ~${Math.round(loc.accuracy || 0)} m`;
+      renderOffer({
 
-    $("viewerResult").textContent = JSON.stringify(
-      {
-        driverId: loc.driverId,
-        lat: loc.lat,
-        lng: loc.lng,
-        accuracy: loc.accuracy,
-        updatedAt: new Date(loc.updatedAt).toLocaleString(),
-        ageSeconds: age,
+        expired: true,
+
+        rideId: message.rideId
+
+      });
+
+    }
+
+
+    log(message);
+
+  };
+
+}
+
+
+/* =========================
+   MOSTRAR OFERTA
+========================= */
+
+function renderOffer(message) {
+
+  if (message.expired) {
+
+    $("offer").innerHTML =
+      "<b>⌛ Oferta expirada</b>";
+
+    return;
+
+  }
+
+
+  $("offer").innerHTML = `
+
+    <div class="offer">
+
+      <h3>🚕 Nova corrida</h3>
+
+      <p>
+        📍 ${message.pickup.label}
+      </p>
+
+      <p>
+        🎯 ${message.destination.label}
+      </p>
+
+      <p>
+        📏 ${message.distanceToPickupKm} km
+      </p>
+
+      <p>
+        ⏱️ Responda antes de expirar.
+      </p>
+
+      <button onclick="respond('ACCEPT')">
+        ✅ ACEITAR
+      </button>
+
+      <button onclick="respond('REJECT')">
+        ❌ RECUSAR
+      </button>
+
+    </div>
+
+  `;
+
+}
+
+
+/* =========================
+   CLIENTE PEDE CORRIDA
+========================= */
+
+async function requestRide() {
+
+  const body = {
+
+    pickup: {
+
+      label:
+        $("pickupLabel").value,
+
+      lat:
+        Number($("pickupLat").value),
+
+      lng:
+        Number($("pickupLng").value)
+
+    },
+
+    destination: {
+
+      label:
+        $("destLabel").value,
+
+      lat:
+        Number($("destLat").value),
+
+      lng:
+        Number($("destLng").value)
+
+    }
+
+  };
+
+
+  const response = await fetch(
+    "/api/rides",
+    {
+
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json"
       },
+
+      body: JSON.stringify(body)
+
+    }
+  );
+
+
+  const data =
+    await response.json();
+
+
+  currentRide =
+    data.ride;
+
+
+  $("rideResult").textContent =
+    JSON.stringify(data, null, 2);
+
+
+  log(data);
+
+}
+
+
+/* =========================
+   MOTORISTA ACEITA / RECUSA
+========================= */
+
+async function respond(action) {
+
+  if (!currentRide) {
+
+    return;
+
+  }
+
+
+  const rideId =
+    currentRide.rideId ||
+    currentRide.id;
+
+
+  const response = await fetch(
+
+    `/api/rides/${rideId}/respond`,
+
+    {
+
+      method: "POST",
+
+      headers: {
+
+        "Content-Type":
+          "application/json"
+
+      },
+
+      body: JSON.stringify({
+
+        driverId:
+          $("driverId").value,
+
+        action
+
+      })
+
+    }
+
+  );
+
+
+  const data =
+    await response.json();
+
+
+  $("rideResult").textContent =
+    JSON.stringify(
+      data,
       null,
       2
     );
 
-    $("mapLink").innerHTML = `<a style="color:#38bdf8" href="https://www.google.com/maps?q=${loc.lat},${loc.lng}" target="_blank" rel="noopener">Abrir no Google Maps →</a>`;
 
-    updateMarker(loc.lat, loc.lng, loc.accuracy);
-    checkBackend();
-  } catch {
-    $("viewerStatus").className = "status err";
-    $("viewerStatus").textContent = "Erro de comunicação";
+  if (action === "ACCEPT") {
+
+    $("offer").innerHTML = `
+
+      <div class="ok">
+
+        ✅ Corrida aceita!
+
+      </div>
+
+    `;
+
   }
+
+  else {
+
+    $("offer").innerHTML = `
+
+      <div class="warn">
+
+        ❌ Recusada.
+        Backend procurando
+        o próximo motorista...
+
+      </div>
+
+    `;
+
+  }
+
+
+  log(data);
+
 }
 
-$("btnWatchStart").onclick = () => {
-  $("btnWatchStart").disabled = true;
-  $("btnWatchStop").disabled = false;
-  if (!map) initMap();
-  watchOnce();
-  watchTimer = setInterval(watchOnce, 4000);
-};
-
-$("btnWatchStop").onclick = () => {
-  if (watchTimer) clearInterval(watchTimer);
-  watchTimer = null;
-  $("btnWatchStart").disabled = false;
-  $("btnWatchStop").disabled = true;
-  $("viewerStatus").className = "status";
-  $("viewerStatus").textContent = "Parado.";
-};
-
-// ----- Calcular rota (OSRM, grátis) -----
-let routeLine = null;
-let originMarker = null;
-let destMarker = null;
-let pickMode = null; // "origin" | "destino" | null
-let originLatLng = null;
-let destLatLng = null;
-
-function onMapClickForRoute(e) {
-  if (!pickMode) return;
-  const latlng = [e.latlng.lat, e.latlng.lng];
-
-  if (pickMode === "origin") {
-    originLatLng = latlng;
-    if (originMarker) {
-      originMarker.setLatLng(latlng);
-    } else {
-      originMarker = L.marker(latlng, {
-        title: "Origem",
-        draggable: true,
-        icon: L.divIcon({ className: "", html: "🟢", iconSize: [24, 24] }),
-      }).addTo(map).bindPopup("Origem");
-      originMarker.on("dragend", () => {
-        const p = originMarker.getLatLng();
-        originLatLng = [p.lat, p.lng];
-      });
-    }
-  } else if (pickMode === "destino") {
-    destLatLng = latlng;
-    if (destMarker) {
-      destMarker.setLatLng(latlng);
-    } else {
-      destMarker = L.marker(latlng, {
-        title: "Destino",
-        draggable: true,
-        icon: L.divIcon({ className: "", html: "🏁", iconSize: [24, 24] }),
-      }).addTo(map).bindPopup("Destino");
-      destMarker.on("dragend", () => {
-        const p = destMarker.getLatLng();
-        destLatLng = [p.lat, p.lng];
-      });
-    }
-  }
-
-  pickMode = null;
-  $("routeStatus").className = "status ok";
-  $("routeStatus").textContent = "Ponto marcado. Marque o outro ponto ou clique em Calcular rota.";
-}
-
-// ----- Buscar endereço por nome (Nominatim/OpenStreetMap, grátis) -----
-async function geocodeAddress(text, cityHint) {
-  let query = text.trim();
-  if (!query) return null;
-
-  // se o texto não menciona a cidade e temos uma dica (ex: cidade da origem), anexa
-  if (cityHint && !query.toLowerCase().includes(cityHint.toLowerCase())) {
-    query = `${query}, ${cityHint}`;
-  }
-
-  // viewbox = área de Goiás, restringe resultados ao estado
-  const viewbox = "-53.4,-12.3,-45.8,-19.6";
-  const url =
-    `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1` +
-    `&viewbox=${viewbox}&bounded=1` +
-    `&countrycodes=br&q=${encodeURIComponent(query + ", Goiás, Brasil")}`;
-
-  const r = await fetch(url, {
-    headers: { Accept: "application/json" },
-  });
-  const results = await r.json();
-  if (!results.length) return null;
-
-  const a = results[0].address || {};
-  return {
-    lat: Number(results[0].lat),
-    lng: Number(results[0].lon),
-    label: results[0].display_name,
-    city: a.city || a.town || a.municipality || a.village || null,
-    // "class"/"type" indicam o nível de precisão do resultado
-    osmClass: results[0].class || null,
-    osmType: results[0].type || null,
-  };
-}
-
-// nível de precisão aproximado a partir da classe/tipo devolvido pelo Nominatim
-function isPreciseMatch(found) {
-  if (!found) return false;
-  const precise = ["house", "building", "residential", "road", "primary", "secondary", "tertiary", "living_street", "unclassified"];
-  return precise.includes(found.osmType) || found.osmClass === "building";
-}
-
-$("btnSearchAddresses").onclick = async () => {
-  const originText = $("originText").value.trim();
-  const destText = $("destText").value.trim();
-
-  if (!originText && !destText) {
-    $("routeStatus").className = "status err";
-    $("routeStatus").textContent = "Digite ao menos um endereço (origem ou destino).";
-    return;
-  }
-
-  if (!map) initMap();
-  $("routeStatus").className = "status wait";
-  $("routeStatus").textContent = "Buscando endereços...";
-
-  try {
-    let originFound = null;
-    let destFound = null;
-
-    if (originText) {
-      originFound = await geocodeAddress(originText);
-      if (!originFound) throw new Error(`Origem não encontrada: "${originText}"`);
-      originLatLng = [originFound.lat, originFound.lng];
-      if (originMarker) {
-        originMarker.setLatLng(originLatLng);
-      } else {
-        originMarker = L.marker(originLatLng, {
-          title: "Origem",
-          draggable: true,
-          icon: L.divIcon({ className: "", html: "🟢", iconSize: [24, 24] }),
-        }).addTo(map);
-        originMarker.on("dragend", () => {
-          const p = originMarker.getLatLng();
-          originLatLng = [p.lat, p.lng];
-        });
-      }
-      originMarker.bindPopup("Origem: " + originFound.label);
-    }
-
-    if (destText) {
-      // usa a cidade da origem como referência, se o texto do destino não citar uma cidade
-      const cityHint = originFound?.city || null;
-      destFound = await geocodeAddress(destText, cityHint);
-      if (!destFound) throw new Error(`Destino não encontrado: "${destText}"`);
-      destLatLng = [destFound.lat, destFound.lng];
-      if (destMarker) {
-        destMarker.setLatLng(destLatLng);
-      } else {
-        destMarker = L.marker(destLatLng, {
-          title: "Destino",
-          draggable: true,
-          icon: L.divIcon({ className: "", html: "🏁", iconSize: [24, 24] }),
-        }).addTo(map);
-        destMarker.on("dragend", () => {
-          const p = destMarker.getLatLng();
-          destLatLng = [p.lat, p.lng];
-        });
-      }
-      destMarker.bindPopup("Destino: " + destFound.label);
-    }
-
-    const bounds = [];
-    if (originLatLng) bounds.push(originLatLng);
-    if (destLatLng) bounds.push(destLatLng);
-    if (bounds.length === 2) {
-      map.fitBounds(bounds, { padding: [50, 50] });
-    } else if (bounds.length === 1) {
-      map.setView(bounds[0], 15);
-    }
-
-    // mostra os endereços resolvidos pra conferência antes de calcular a rota
-    const lines = [];
-    if (originFound) {
-      const warn = isPreciseMatch(originFound) ? "" : " ⚠️ aproximado (rua não encontrada, arraste o pino se precisar)";
-      lines.push("🟢 " + originFound.label + warn);
-    }
-    if (destFound) {
-      const warn = isPreciseMatch(destFound) ? "" : " ⚠️ aproximado (rua não encontrada, arraste o pino se precisar)";
-      lines.push("🏁 " + destFound.label + warn);
-    }
-
-    $("routeStatus").className = "status ok";
-    $("routeStatus").innerHTML =
-      lines.map((l) => `<div>${l}</div>`).join("") +
-      (originLatLng && destLatLng
-        ? "<div style='margin-top:4px'>Confira os endereços acima. Se estiver certo, clique em Calcular rota.</div>"
-        : "<div style='margin-top:4px'>Informe o outro ponto (busca ou clique no mapa).</div>");
-  } catch (err) {
-    $("routeStatus").className = "status err";
-    $("routeStatus").textContent = err.message || "Erro ao buscar endereço";
-  }
-};
-
-$("btnPickOrigin").onclick = () => {
-  if (!map) initMap();
-  pickMode = "origin";
-  $("routeStatus").className = "status wait";
-  $("routeStatus").textContent = "Clique no mapa para marcar a ORIGEM.";
-};
-
-$("btnPickDest").onclick = () => {
-  if (!map) initMap();
-  pickMode = "destino";
-  $("routeStatus").className = "status wait";
-  $("routeStatus").textContent = "Clique no mapa para marcar o DESTINO.";
-};
-
-$("btnClearRoute").onclick = () => {
-  pickMode = null;
-  if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
-  if (originMarker) { map.removeLayer(originMarker); originMarker = null; }
-  if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
-  originLatLng = null;
-  destLatLng = null;
-  $("routeStatus").className = "status";
-  $("routeStatus").textContent = "Marque origem e destino no mapa.";
-};
-
-async function calcRoute() {
-  if (!originLatLng || !destLatLng) {
-    $("routeStatus").className = "status err";
-    $("routeStatus").textContent = "Marque a origem e o destino primeiro.";
-    return;
-  }
-
-  $("routeStatus").className = "status wait";
-  $("routeStatus").textContent = "Calculando rota...";
-
-  try {
-    const [oLat, oLng] = originLatLng;
-    const [dLat, dLng] = destLatLng;
-    const url = `https://router.project-osrm.org/route/v1/driving/${oLng},${oLat};${dLng},${dLat}?overview=full&geometries=geojson`;
-
-    const r = await fetch(url);
-    const data = await r.json();
-
-    if (data.code !== "Ok" || !data.routes?.length) {
-      throw new Error("Rota não encontrada entre os pontos");
-    }
-
-    const route = data.routes[0];
-
-    if (routeLine) map.removeLayer(routeLine);
-    routeLine = L.geoJSON(route.geometry, {
-      style: { color: "#38bdf8", weight: 5, opacity: 0.85 },
-    }).addTo(map);
-
-    map.fitBounds(routeLine.getBounds(), { padding: [30, 30] });
-
-    const km = (route.distance / 1000).toFixed(1);
-    const min = Math.round(route.duration / 60);
-
-    $("routeStatus").className = "status ok";
-    $("routeStatus").textContent = `📏 ${km} km · ⏱ ~${min} min (rota livre de trânsito, OSRM grátis)`;
-  } catch (err) {
-    $("routeStatus").className = "status err";
-    $("routeStatus").textContent = err.message || "Erro ao calcular rota";
-  }
-}
-
-$("btnCalcRoute").onclick = calcRoute;
-
-// ----- Lista de motoristas online -----
-function focusDriver(id, lat, lng, accuracy) {
-  $("watchId").value = id;
-  if (!map) initMap();
-  updateMarker(lat, lng, accuracy);
-  map.setView([lat, lng], 15, { animate: true });
-}
-window.focusDriver = focusDriver;
-
-async function loadDriversList() {
-  try {
-    const r = await fetch("/api/locations", { cache: "no-store" });
-    const d = await r.json();
-    if (!d.ok) return;
-
-    if (!d.locations.length) {
-      $("driversList").innerHTML = "Nenhum motorista online no momento.";
-      return;
-    }
-
-    $("driversList").innerHTML = d.locations
-      .map(
-        (loc) => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #334155">
-        <div>
-          <strong style="color:#f8fafc">${loc.driverId}</strong><br>
-          <span class="hint">há ${loc.ageSeconds}s · ~${Math.round(loc.accuracy || 0)} m</span>
-        </div>
-        <button class="secondary" style="width:auto;padding:6px 10px" onclick="focusDriver('${loc.driverId}', ${loc.lat}, ${loc.lng}, ${loc.accuracy || 30})">Ver no mapa</button>
-      </div>`
-      )
-      .join("");
-  } catch {
-    $("driversList").innerHTML = "Erro ao carregar lista de motoristas.";
-  }
-}
-
-checkBackend();
-setInterval(checkBackend, 15000);
-loadDriversList();
-setInterval(loadDriversList, 5000);
 </script>
+
 </body>
 </html>
