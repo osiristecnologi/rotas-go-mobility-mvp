@@ -45,7 +45,7 @@ button:disabled{opacity:.5}
 <body>
 <header>
   <div>
-    <h1>🚕 Rotas GO</h1>
+    <h1> Rotas GO</h1>
     <div class="sub">Corridas · Goiás · teste</div>
   </div>
   <div>
@@ -69,9 +69,18 @@ button:disabled{opacity:.5}
     </div>
 
     <div class="card">
+      <h2>Tipo de serviço</h2>
+      <div class="row">
+        <button type="button" id="svcRide" class="active" style="background:#f97316">🚕 Motorista</button>
+        <button type="button" id="svcDelivery" class="secondary">📦 Entrega</button>
+      </div>
+      <p class="hint" id="svcHint">Motorista: R$ 2,00/km + taxa R$ 0,80 · Entrega: R$ 1,20/km + taxa R$ 0,60</p>
+    </div>
+
+    <div class="card">
       <h2>Embarque e destino</h2>
-      <label>Origem</label>
-      <input id="originText" placeholder="Ex: Av. Brasil, Anápolis" autocomplete="off">
+      <label>Origem (sua localização)</label>
+      <input id="originText" placeholder="Detectando sua localização..." autocomplete="off">
       <label>Destino</label>
       <input id="destText" placeholder="Ex: Centro, Anápolis" autocomplete="off">
       <div class="row" style="margin-top:8px">
@@ -182,10 +191,13 @@ const GOIAS_CENTER = [-16.0, -49.5];
 
 let mapUser, mapDriver;
 let originMarker, destMarker, driverMarker, accuracyCircle;
+let trackingMarker = null, trackingCircle = null;
 let originLatLng = null, destLatLng = null;
 let pickMode = null;
 let routeLine = null;
 let lastPricing = null;
+let serviceType = localStorage.getItem("rotasgo_service") || "ride";
+
 let sendWatchId = null, sendTimer = null, wakeLock = null;
 let driverWs = null, clientWs = null, clientId = null, currentRideId = null, currentOffer = null;
 
@@ -208,6 +220,63 @@ function showTab(tab) {
 }
 $("tabUser").onclick = () => showTab("user");
 $("tabDriver").onclick = () => showTab("driver");
+
+// ----- Tipo de serviço -----
+function setService(type) {
+  serviceType = type;
+  localStorage.setItem("rotasgo_service", type);
+  lastPricing = null;
+  $("priceBox").classList.add("hide");
+  if (type === "ride") {
+    $("svcRide").classList.add("active");
+    $("svcRide").style.background = "#f97316";
+    $("svcDelivery").classList.remove("active");
+    $("svcDelivery").style.background = "";
+    $("svcHint").textContent = "Motorista: R$ 2,00/km + taxa R$ 0,80 por corrida";
+  } else {
+    $("svcDelivery").classList.add("active");
+    $("svcDelivery").style.background = "#f97316";
+    $("svcRide").classList.remove("active");
+    $("svcRide").style.background = "";
+    $("svcHint").textContent = "Entrega: R$ 1,20/km + taxa R$ 0,60 por corrida";
+  }
+}
+$("svcRide").onclick = () => setService("ride");
+$("svcDelivery").onclick = () => setService("delivery");
+setService(serviceType);
+
+// ----- Localização automática do usuário (embarque) -----
+function autoUserOrigin() {
+  if (!navigator.geolocation) {
+    $("originText").placeholder = "Informe a origem ou marque no mapa";
+    return;
+  }
+  $("originText").placeholder = "Detectando sua localização...";
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      setOrigin([lat, lng]);
+      $("originText").value = `Minha localização (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+      $("routeStatus").className = "status ok";
+      $("routeStatus").textContent = "Embarque definido pela sua localização. Informe só o destino.";
+      if (mapUser) {
+        mapUser.setView([lat, lng], 15);
+      }
+    },
+    (err) => {
+      $("originText").placeholder = "Permita a localização ou marque no mapa";
+      $("routeStatus").className = "status wait";
+      $("routeStatus").textContent =
+        err.code === 1
+          ? "Permissão de localização negada. Marque a origem no mapa ou digite o endereço."
+          : "Não foi possível obter sua localização. Marque a origem no mapa.";
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+  );
+}
+
+
 
 function initMapUser() {
   mapUser = L.map("mapUser", { center: GOIAS_CENTER, zoom: 7, maxBounds: GOIAS_BOUNDS.pad(0.15), minZoom: 6 });
@@ -305,6 +374,7 @@ $("btnEstimate").onclick = async () => {
       body: JSON.stringify({
         origin: { lat: originLatLng[0], lng: originLatLng[1] },
         destination: { lat: destLatLng[0], lng: destLatLng[1] },
+        serviceType,
       }),
     });
     const data = await res.json();
@@ -312,7 +382,7 @@ $("btnEstimate").onclick = async () => {
     lastPricing = data;
     $("priceBox").classList.remove("hide");
     $("priceTotal").textContent = `R$ ${data.total.toFixed(2).replace(".", ",")}`;
-    $("priceDetail").textContent = `${data.distanceKm} km × R$ ${data.pricePerKm.toFixed(2)} + taxa R$ ${data.appFee.toFixed(2)}`;
+    $("priceDetail").textContent = `${data.serviceLabel || (serviceType === "delivery" ? "Entrega" : "Motorista")} · ${data.distanceKm} km × R$ ${data.pricePerKm.toFixed(2)} + taxa R$ ${data.appFee.toFixed(2)}`;
     $("routeStatus").className = "status ok";
     $("routeStatus").textContent = `Rota ~${data.distanceKm} km`;
 
@@ -366,6 +436,31 @@ async function loadDrivers() {
 }
 
 // ----- Solicitar corrida -----
+
+function updateTrackingMarker(lat, lng, accuracy) {
+  if (!mapUser) initMapUser();
+  const ll = [lat, lng];
+  if (!trackingMarker) {
+    trackingMarker = L.marker(ll, {
+      title: "Seu motorista",
+      icon: L.divIcon({ className: "", html: "🚕", iconSize: [28, 28] }),
+    }).addTo(mapUser).bindPopup("Seu motorista");
+    trackingCircle = L.circle(ll, {
+      radius: accuracy || 40,
+      color: "#f97316",
+      fillColor: "#f97316",
+      fillOpacity: 0.12,
+      weight: 1,
+    }).addTo(mapUser);
+  } else {
+    trackingMarker.setLatLng(ll);
+    if (trackingCircle) trackingCircle.setLatLng(ll).setRadius(accuracy || 40);
+  }
+  const z = mapUser.getZoom();
+  if (z < 13) mapUser.setView(ll, 15, { animate: true });
+  else mapUser.panTo(ll, { animate: true });
+}
+
 function ensureClientWs() {
   if (clientWs && clientWs.readyState === WebSocket.OPEN) return;
   if (!clientId) {
@@ -384,8 +479,6 @@ function ensureClientWs() {
       showCancel(true);
       rideActive = true;
     } else if (msg.type === "ride_assigned") {
-      $("rideStatus").className = "status ok";
-      $("rideStatus").textContent = "Motorista a caminho!";
       $("assignedBox").classList.remove("hide");
       setRequestEnabled(false);
       showCancel(true);
@@ -397,6 +490,18 @@ function ensureClientWs() {
       $("drvPhoto").src = d.photoUrl
         ? (d.photoUrl.startsWith("http") ? d.photoUrl : location.origin + d.photoUrl)
         : "https://via.placeholder.com/48?text=🚗";
+      const trackMsg = (msg.tracking && msg.tracking.message) || "Motorista a caminho · calculando tempo...";
+      $("rideStatus").className = "status ok";
+      $("rideStatus").textContent = trackMsg;
+      if (d.lat != null && d.lng != null) updateTrackingMarker(d.lat, d.lng, d.accuracy);
+    } else if (msg.type === "driver_position") {
+      if (msg.rideId && currentRideId && msg.rideId !== currentRideId) return;
+      $("rideStatus").className = msg.phase === "arrived" ? "status ok" : "status wait";
+      $("rideStatus").textContent = msg.message || "Motorista a caminho";
+      if (msg.lat != null && msg.lng != null) updateTrackingMarker(msg.lat, msg.lng, msg.accuracy);
+      setRequestEnabled(false);
+      showCancel(true);
+      rideActive = true;
     } else if (msg.type === "ride_no_driver") {
       $("rideStatus").className = "status err";
       $("rideStatus").textContent = msg.message;
@@ -418,6 +523,8 @@ function ensureClientWs() {
       currentRideId = null;
       showCancel(false);
       $("assignedBox").classList.add("hide");
+      if (trackingMarker && mapUser) { mapUser.removeLayer(trackingMarker); trackingMarker = null; }
+      if (trackingCircle && mapUser) { mapUser.removeLayer(trackingCircle); trackingCircle = null; }
       refreshCancelInfo();
     }
   };
@@ -494,6 +601,7 @@ $("btnRequest").onclick = async () => {
         origin: { lat: originLatLng[0], lng: originLatLng[1], label: $("originText").value.trim() },
         destination: { lat: destLatLng[0], lng: destLatLng[1], label: $("destText").value.trim() },
         pricing: lastPricing,
+        serviceType,
       }),
     });
     const data = await res.json();
@@ -526,6 +634,8 @@ $("btnCancelRide").onclick = async () => {
     currentRideId = null;
     showCancel(false);
     $("assignedBox").classList.add("hide");
+    if (trackingMarker && mapUser) { mapUser.removeLayer(trackingMarker); trackingMarker = null; }
+    if (trackingCircle && mapUser) { mapUser.removeLayer(trackingCircle); trackingCircle = null; }
     $("rideStatus").className = "status err";
     $("rideStatus").textContent = data.message || "Corrida cancelada.";
     // bloqueia solicitar por 10s
@@ -736,7 +846,7 @@ async function checkBackend() {
     const r = await fetch("/health", { cache: "no-store" });
     const d = await r.json();
     if (d.ok) {
-      $("backendBadge").textContent = `V${d.version}`;
+      $("backendBadge").textContent = `V${d.version}${d.db ? "+DB" : ""}`;
       $("activeBadge").textContent = `${d.activeDrivers} online`;
     }
   } catch { $("backendBadge").textContent = "offline"; }
@@ -749,7 +859,15 @@ setInterval(loadDrivers, 5000);
 // restaura aba (evita voltar pra Usuário ao tirar foto no celular)
 const savedTab = localStorage.getItem("rotasgo_tab") || "user";
 showTab(savedTab);
-if (savedTab === "user") setTimeout(() => initMapUser(), 100);
+if (savedTab === "user") {
+  setTimeout(() => {
+    initMapUser();
+    autoUserOrigin();
+  }, 150);
+} else {
+  // ainda pede GPS do usuário em background para quando trocar de aba
+  setTimeout(autoUserOrigin, 500);
+}
 // clientId estável
 clientId = localStorage.getItem("rotasgo_clientId") || ("CLI-" + Math.random().toString(36).slice(2, 8).toUpperCase());
 localStorage.setItem("rotasgo_clientId", clientId);
