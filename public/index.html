@@ -99,8 +99,12 @@ button:disabled{opacity:.5}
     </div>
 
     <div class="card">
-      <button id="btnRequest">🚕 Solicitar corrida</button>
+      <div class="row">
+        <button id="btnRequest">🚕 Solicitar corrida</button>
+        <button id="btnCancelRide" class="danger hide">✕ Cancelar</button>
+      </div>
       <div id="rideStatus" class="status">Preencha origem/destino e veja o valor.</div>
+      <div id="cancelInfo" class="hint"></div>
       <div id="assignedBox" class="hide" style="margin-top:12px">
         <h2>Seu motorista</h2>
         <div class="driverCard">
@@ -185,21 +189,25 @@ let lastPricing = null;
 let sendWatchId = null, sendTimer = null, wakeLock = null;
 let driverWs = null, clientWs = null, clientId = null, currentRideId = null, currentOffer = null;
 
-// ----- Tabs -----
-$("tabUser").onclick = () => {
-  $("tabUser").classList.add("active");
-  $("tabDriver").classList.remove("active");
-  $("panelUser").classList.remove("hide");
-  $("panelDriver").classList.add("hide");
-  setTimeout(() => { if (!mapUser) initMapUser(); else mapUser.invalidateSize(); }, 50);
-};
-$("tabDriver").onclick = () => {
-  $("tabDriver").classList.add("active");
-  $("tabUser").classList.remove("active");
-  $("panelDriver").classList.remove("hide");
-  $("panelUser").classList.add("hide");
-  setTimeout(() => { if (!mapDriver) initMapDriver(); else mapDriver.invalidateSize(); }, 50);
-};
+// ----- Tabs (persiste para não perder tela ao tirar foto) -----
+function showTab(tab) {
+  localStorage.setItem("rotasgo_tab", tab);
+  if (tab === "driver") {
+    $("tabDriver").classList.add("active");
+    $("tabUser").classList.remove("active");
+    $("panelDriver").classList.remove("hide");
+    $("panelUser").classList.add("hide");
+    setTimeout(() => { if (!mapDriver) initMapDriver(); else mapDriver.invalidateSize(); }, 50);
+  } else {
+    $("tabUser").classList.add("active");
+    $("tabDriver").classList.remove("active");
+    $("panelUser").classList.remove("hide");
+    $("panelDriver").classList.add("hide");
+    setTimeout(() => { if (!mapUser) initMapUser(); else mapUser.invalidateSize(); }, 50);
+  }
+}
+$("tabUser").onclick = () => showTab("user");
+$("tabDriver").onclick = () => showTab("driver");
 
 function initMapUser() {
   mapUser = L.map("mapUser", { center: GOIAS_CENTER, zoom: 7, maxBounds: GOIAS_BOUNDS.pad(0.15), minZoom: 6 });
@@ -360,7 +368,10 @@ async function loadDrivers() {
 // ----- Solicitar corrida -----
 function ensureClientWs() {
   if (clientWs && clientWs.readyState === WebSocket.OPEN) return;
-  if (!clientId) clientId = "CLI-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+  if (!clientId) {
+    clientId = localStorage.getItem("rotasgo_clientId") || ("CLI-" + Math.random().toString(36).slice(2, 8).toUpperCase());
+    localStorage.setItem("rotasgo_clientId", clientId);
+  }
   const proto = location.protocol === "https:" ? "wss" : "ws";
   clientWs = new WebSocket(`${proto}://${location.host}/ws?role=client&id=${encodeURIComponent(clientId)}`);
   clientWs.onmessage = (ev) => {
@@ -369,10 +380,16 @@ function ensureClientWs() {
     if (msg.type === "ride_searching") {
       $("rideStatus").className = "status wait";
       $("rideStatus").textContent = msg.message;
+      setRequestEnabled(false);
+      showCancel(true);
+      rideActive = true;
     } else if (msg.type === "ride_assigned") {
       $("rideStatus").className = "status ok";
       $("rideStatus").textContent = "Motorista a caminho!";
       $("assignedBox").classList.remove("hide");
+      setRequestEnabled(false);
+      showCancel(true);
+      rideActive = true;
       const d = msg.driver || {};
       $("drvName").textContent = d.name || msg.driverId;
       $("drvCar").textContent = [d.model, d.color].filter(Boolean).join(" · ") || "—";
@@ -383,11 +400,70 @@ function ensureClientWs() {
     } else if (msg.type === "ride_no_driver") {
       $("rideStatus").className = "status err";
       $("rideStatus").textContent = msg.message;
+      rideActive = false;
+      currentRideId = null;
+      showCancel(false);
+      requestCooldownUntil = Date.now() + 10000;
+      setRequestEnabled(false);
+      let left = 10;
+      const iv = setInterval(() => {
+        left -= 1;
+        if (left <= 0) { clearInterval(iv); setRequestEnabled(true); }
+        else $("btnRequest").textContent = `⏳ Aguarde ${left}s`;
+      }, 1000);
+    } else if (msg.type === "ride_cancelled") {
+      $("rideStatus").className = "status err";
+      $("rideStatus").textContent = msg.message || "Corrida cancelada.";
+      rideActive = false;
+      currentRideId = null;
+      showCancel(false);
+      $("assignedBox").classList.add("hide");
+      refreshCancelInfo();
     }
   };
 }
 
+let rideActive = false;
+let requestCooldownUntil = 0;
+
+function setRequestEnabled(enabled) {
+  $("btnRequest").disabled = !enabled;
+  if (!enabled) {
+    $("btnRequest").textContent = "⏳ Indisponível";
+  } else {
+    $("btnRequest").textContent = "🚕 Solicitar corrida";
+  }
+}
+
+function showCancel(show) {
+  if (show) $("btnCancelRide").classList.remove("hide");
+  else $("btnCancelRide").classList.add("hide");
+}
+
+async function refreshCancelInfo() {
+  if (!clientId) return;
+  try {
+    const r = await fetch(`/api/client/${encodeURIComponent(clientId)}/stats`);
+    const d = await r.json();
+    if (!d.ok) return;
+    let t = `Cancelamentos: ${d.cancelCount} · grátis restantes: ${d.freeLeft}`;
+    if (d.pendingFee > 0) t += ` · taxa pendente R$ ${d.pendingFee.toFixed(2).replace(".", ",")}`;
+    $("cancelInfo").textContent = t;
+  } catch {}
+}
+
 $("btnRequest").onclick = async () => {
+  if (rideActive) {
+    $("rideStatus").className = "status err";
+    $("rideStatus").textContent = "Já existe uma corrida em andamento.";
+    return;
+  }
+  if (Date.now() < requestCooldownUntil) {
+    const s = Math.ceil((requestCooldownUntil - Date.now()) / 1000);
+    $("rideStatus").className = "status wait";
+    $("rideStatus").textContent = `Aguarde ${s}s para solicitar de novo.`;
+    return;
+  }
   if (!originLatLng || !destLatLng) {
     $("rideStatus").className = "status err";
     $("rideStatus").textContent = "Marque origem e destino";
@@ -405,6 +481,9 @@ $("btnRequest").onclick = async () => {
   $("assignedBox").classList.add("hide");
   $("rideStatus").className = "status wait";
   $("rideStatus").textContent = "Solicitando...";
+  setRequestEnabled(false);
+  showCancel(true);
+  rideActive = true;
   try {
     const res = await fetch("/api/ride/request", {
       method: "POST",
@@ -421,10 +500,53 @@ $("btnRequest").onclick = async () => {
     if (!data.ok) throw new Error(data.error || "falha");
     currentRideId = data.rideId;
     $("rideStatus").className = "status wait";
-    $("rideStatus").textContent = "Procurando motorista...";
+    let msg = "Procurando motorista...";
+    if (data.pricing?.cancelFee) {
+      msg += ` (inclui taxa cancelamento R$ ${Number(data.pricing.cancelFee).toFixed(2).replace(".", ",")})`;
+    }
+    $("rideStatus").textContent = msg;
+    refreshCancelInfo();
+  } catch (e) {
+    rideActive = false;
+    showCancel(false);
+    setRequestEnabled(true);
+    $("rideStatus").className = "status err";
+    $("rideStatus").textContent = e.message;
+  }
+};
+
+$("btnCancelRide").onclick = async () => {
+  if (!currentRideId) return;
+  $("btnCancelRide").disabled = true;
+  try {
+    const res = await fetch(`/api/ride/${encodeURIComponent(currentRideId)}/cancel`, { method: "POST" });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "falha ao cancelar");
+    rideActive = false;
+    currentRideId = null;
+    showCancel(false);
+    $("assignedBox").classList.add("hide");
+    $("rideStatus").className = "status err";
+    $("rideStatus").textContent = data.message || "Corrida cancelada.";
+    // bloqueia solicitar por 10s
+    requestCooldownUntil = Date.now() + 10000;
+    setRequestEnabled(false);
+    let left = 10;
+    const iv = setInterval(() => {
+      left -= 1;
+      if (left <= 0) {
+        clearInterval(iv);
+        setRequestEnabled(true);
+      } else {
+        $("btnRequest").textContent = `⏳ Aguarde ${left}s`;
+      }
+    }, 1000);
+    refreshCancelInfo();
   } catch (e) {
     $("rideStatus").className = "status err";
     $("rideStatus").textContent = e.message;
+  } finally {
+    $("btnCancelRide").disabled = false;
   }
 };
 
@@ -452,6 +574,8 @@ $("btnUploadPhoto").onclick = async () => {
     $("photoPreview").src = fullUrl;
     $("photoPreviewWrap").classList.remove("hide");
     $("profileStatus").textContent = "Foto enviada. Agora clique em Salvar perfil.";
+    showTab("driver");
+    localStorage.setItem("rotasgo_tab", "driver");
   } catch (e) {
     $("profileStatus").textContent = e.message || "Erro no upload";
   }
@@ -476,6 +600,8 @@ $("btnSaveProfile").onclick = async () => {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "falha");
     $("profileStatus").textContent = "Perfil salvo.";
+    showTab("driver");
+    localStorage.setItem("rotasgo_tab", "driver");
   } catch (e) {
     $("profileStatus").textContent = e.message;
   }
@@ -516,6 +642,10 @@ function connectDriverWs() {
         `Até o embarque: ~${msg.distanceToPickupKm} km<br>` +
         `Corrida: ~${p.distanceKm || "?"} km · <strong>R$ ${(p.total || 0).toFixed(2).replace(".", ",")}</strong><br>` +
         `Responda em ${msg.expiresInSeconds}s`;
+    } else if (msg.type === "ride_cancelled") {
+      $("rideOfferBox").classList.add("hide");
+      currentOffer = null;
+      $("rideConnStatus").textContent = msg.message || "Passageiro cancelou a corrida.";
     }
   };
 }
@@ -616,7 +746,14 @@ checkBackend();
 loadDrivers();
 setInterval(checkBackend, 15000);
 setInterval(loadDrivers, 5000);
-setTimeout(() => initMapUser(), 100);
+// restaura aba (evita voltar pra Usuário ao tirar foto no celular)
+const savedTab = localStorage.getItem("rotasgo_tab") || "user";
+showTab(savedTab);
+if (savedTab === "user") setTimeout(() => initMapUser(), 100);
+// clientId estável
+clientId = localStorage.getItem("rotasgo_clientId") || ("CLI-" + Math.random().toString(36).slice(2, 8).toUpperCase());
+localStorage.setItem("rotasgo_clientId", clientId);
+setTimeout(refreshCancelInfo, 300);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && sendWatchId != null) requestWakeLock();
 });
